@@ -31,7 +31,7 @@ The same CLI also provides a way to search the [Wayback Machine](https://web.arc
 deleted tweets by a specified user:
 
 ```
-$ target/debug/twcc deleted-tweets --enable-browser --limit 100 jdegoes
+$ target/release/twcc deleted-tweets --enable-browser --limit 100 jdegoes
 https://web.archive.org/web/20190922222236/https://twitter.com/jdegoes/status/1170420726400212997
 https://web.archive.org/web/20190923221242/https://twitter.com/jdegoes/status/1170711737361940481
 https://web.archive.org/web/20200526150339/https://twitter.com/jdegoes/status/1265251872048320513
