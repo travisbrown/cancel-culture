@@ -13,8 +13,12 @@ async fn main() -> Result<()> {
     let client = Client::from_config_file(&opts.key_file).await?;
 
     match opts.command {
-        SubCommand::ListFollowers(ListFollowers { ids_only }) => {
-            let ids = client.followers_self().await?;
+        SubCommand::ListFollowers(ListFollowers { ids_only, screen_name }) => {
+            let ids = match screen_name {
+                Some(name) => client.followers(name).await?,
+                None => client.followers_self().await?
+            };
+
             if ids_only {
                 for id in ids {
                     println!("{}", id);
@@ -25,8 +29,12 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
-        SubCommand::ListFriends(ListFriends { ids_only }) => {
-            let ids = client.friends_self().await?;
+        SubCommand::ListFriends(ListFriends { ids_only, screen_name }) => {
+            let ids = match screen_name {
+                Some(name) => client.friends(name).await?,
+                None => client.friends_self().await?
+            };
+
             if ids_only {
                 for id in ids {
                     println!("{}", id);
@@ -194,7 +202,7 @@ async fn create_browser(opts: &Opts) -> FClient {
 
 fn print_user_report(users: &[TwitterUser]) {
     for user in users {
-        println!("{},{}", user.id, user.screen_name);
+        println!("{} {} {}", user.id, user.screen_name, user.followers_count);
     }
 }
 
@@ -274,6 +282,10 @@ struct ListFollowers {
     /// Print only the user's ID (by default you get the ID and screen name)
     #[clap(short = 'i', long)]
     ids_only: bool,
+    /// The user to list followers of (by default yourself)
+    #[clap(short = 'u', long)]
+    screen_name: Option<String>
+
 }
 
 /// Print a list of all users you follow
@@ -282,6 +294,9 @@ struct ListFriends {
     /// Print only the user's ID (by default you get the ID and screen name)
     #[clap(short = 'i', long)]
     ids_only: bool,
+    /// The user to list friends of (by default yourself)
+    #[clap(short = 'u', long)]
+    screen_name: Option<String>
 }
 
 /// Print a list of all users you've blocked
