@@ -1,0 +1,293 @@
+use cancelculture::twitter;
+use cancelculture::twitter::{Client, Error, Result};
+use cancelculture::wayback;
+use clap::{crate_authors, crate_version, Clap};
+use egg_mode::user::TwitterUser;
+use fantoccini::Client as FClient;
+use std::collections::{HashMap, HashSet};
+use std::io::Read;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let opts: Opts = Opts::parse();
+    let client = Client::from_config_file(&opts.key_file).await?;
+
+    match opts.command {
+        SubCommand::ListFollowers(ListFollowers { ids_only }) => {
+            let ids = client.followers_self().await?;
+            if ids_only {
+                for id in ids {
+                    println!("{}", id);
+                }
+            } else {
+                let users = client.lookup_users(&ids).await?;
+                print_user_report(&users);
+            }
+            Ok(())
+        }
+        SubCommand::ListFriends(ListFriends { ids_only }) => {
+            let ids = client.friends_self().await?;
+            if ids_only {
+                for id in ids {
+                    println!("{}", id);
+                }
+            } else {
+                let users = client.lookup_users(&ids).await?;
+                print_user_report(&users);
+            }
+            Ok(())
+        }
+        SubCommand::ListBlocks(ListBlocks { ids_only }) => {
+            let ids = client.blocks().await?;
+            if ids_only {
+                for id in ids {
+                    println!("{}", id);
+                }
+            } else {
+                let users = client.lookup_users(&ids).await?;
+                print_user_report(&users);
+            }
+            Ok(())
+        }
+        SubCommand::LookupReply(LookupReply { query }) => {
+            let reply_id = Client::parse_tweet_id(&query)?;
+            match client.get_in_reply_to(reply_id).await? {
+                Some((user, id)) => {
+                    println!("https://twitter.com/{}/status/{}", user, id);
+                    Ok(())
+                }
+                None => Err(Error::NotReplyError(reply_id)),
+            }
+        }
+        SubCommand::BlockedFollows(BlockedFollows { screen_name }) => {
+            let blocks = client.blocks().await?.into_iter().collect::<HashSet<u64>>();
+            let blocked_friends = client
+                .friends(screen_name.clone())
+                .await?
+                .into_iter()
+                .filter(|id| blocks.contains(id))
+                .collect::<Vec<_>>();
+
+            if blocked_friends.is_empty() {
+                eprintln!("{} does not follow anyone you've blocked", screen_name);
+            } else {
+                let mut blocked_follows = client.lookup_users(&blocked_friends).await?;
+                blocked_follows.sort_by_key(|u| -u.followers_count);
+
+                for user in blocked_follows {
+                    println!("@{:16}{:>9}", user.screen_name, user.followers_count);
+                }
+            }
+
+            Ok(())
+        }
+        SubCommand::CheckExistence(CheckExistence { enable_browser }) => {
+            let stdin = std::io::stdin();
+            let mut buffer = String::new();
+            let mut handle = stdin.lock();
+            handle.read_to_string(&mut buffer)?;
+
+            let ids = buffer
+                .split_whitespace()
+                .flat_map(|input| input.parse::<u64>().ok());
+
+            let mut fallback_client = if enable_browser {
+                Some(create_browser(&opts).await)
+            } else {
+                None
+            };
+            let status_map = client.statuses_exist(ids, fallback_client.as_mut()).await?;
+            let mut missing = status_map.into_iter().collect::<Vec<_>>();
+            missing.sort_unstable();
+
+            for id in missing {
+                println!("{} {}", id.0, id.1);
+            }
+
+            Ok(())
+        }
+        SubCommand::DeletedTweets(DeletedTweets {
+            enable_browser,
+            limit,
+            ref screen_name,
+        }) => {
+            let results = wayback::search(format!("twitter.com/{}/status/*", screen_name)).await?;
+
+            let mut candidates = results
+                .0
+                .into_iter()
+                .flat_map(|(k, vs)| {
+                    twitter::extract_status_id(&k).and_then(|id| {
+                        // We currently exclude redirects here, which represent retweets.
+                        let valid = vs
+                            .into_iter()
+                            .filter(|item| item.status == 200)
+                            .collect::<Vec<_>>();
+                        let last = valid.iter().map(|item| item.datetime).max();
+                        let first = valid.into_iter().min_by_key(|item| item.datetime);
+
+                        first.zip(last).map(|(f, l)| (id, l, f))
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            candidates.sort_unstable_by_key(|(_, last, _)| *last);
+            candidates.reverse();
+
+            let selected = candidates.into_iter().take(limit.unwrap_or(usize::MAX));
+
+            let mut by_id: HashMap<u64, wayback::Item> = HashMap::new();
+
+            for (id, _, current) in selected {
+                match by_id.get(&id) {
+                    Some(latest) => {
+                        if latest.datetime < current.datetime {
+                            by_id.insert(id, current);
+                        }
+                    }
+                    None => {
+                        by_id.insert(id, current);
+                    }
+                }
+            }
+
+            let mut fallback_client = if enable_browser {
+                Some(create_browser(&opts).await)
+            } else {
+                None
+            };
+
+            let deleted_status = client
+                .statuses_exist(by_id.iter().map(|(k, _)| *k), fallback_client.as_mut())
+                .await?;
+
+            let mut deleted = deleted_status
+                .into_iter()
+                .filter(|(_, v)| !v)
+                .collect::<Vec<_>>();
+
+            deleted.sort_by_key(|(k, _)| *k);
+
+            for (id, _) in deleted {
+                if let Some(item) = by_id.get(&id) {
+                    println!(
+                        "https://web.archive.org/web/{}/{}",
+                        item.timestamp, item.url
+                    );
+                }
+            }
+
+            Ok(())
+        }
+    }
+}
+
+async fn create_browser(opts: &Opts) -> FClient {
+    cancelculture::browser::make_client_or_panic(
+        &opts.webdriver_browser,
+        !opts.webdriver_disable_headless,
+        opts.webdriver_host.as_deref(),
+        opts.webdriver_port,
+    )
+    .await
+}
+
+fn print_user_report(users: &[TwitterUser]) {
+    for user in users {
+        println!("{},{}", user.id, user.screen_name);
+    }
+}
+
+#[derive(Clap)]
+#[clap(version = crate_version!(), author = crate_authors!())]
+struct Opts {
+    /// TOML file containing Twitter API keys
+    #[clap(short, long, default_value = "keys.toml")]
+    key_file: String,
+    /// Host for Webdriver server
+    #[clap(short = 'h', long)]
+    webdriver_host: Option<String>,
+    /// Port for Webdriver server
+    #[clap(short = 'p', long)]
+    webdriver_port: Option<u16>,
+    /// Force Webdriver server not to use headless mode
+    #[clap(long)]
+    webdriver_disable_headless: bool,
+    /// Specify Webdriver implementation
+    #[clap(short = 'b', long, default_value = "chrome")]
+    webdriver_browser: String,
+    #[clap(subcommand)]
+    command: SubCommand,
+}
+
+#[derive(Clap)]
+enum SubCommand {
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    BlockedFollows(BlockedFollows),
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    LookupReply(LookupReply),
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    CheckExistence(CheckExistence),
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    DeletedTweets(DeletedTweets),
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    ListFollowers(ListFollowers),
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    ListFriends(ListFriends),
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    ListBlocks(ListBlocks),
+}
+
+/// Get the URL of a tweet given the URL or status ID of a reply
+#[derive(Clap)]
+struct LookupReply {
+    query: String,
+}
+
+/// For a given user, list everyone they follow who you block
+#[derive(Clap)]
+struct BlockedFollows {
+    screen_name: String,
+}
+
+/// Checks whether a list of status IDs (from stdin) still exist
+#[derive(Clap)]
+struct CheckExistence {
+    #[clap(short = 'e', long)]
+    enable_browser: bool,
+}
+
+/// Lists Wayback Machine URLs for all deleted tweets by a user
+#[derive(Clap)]
+struct DeletedTweets {
+    #[clap(short = 'e', long)]
+    enable_browser: bool,
+    #[clap(short = 'l', long)]
+    /// Only check the tweets the Wayback Machine most recently knows about
+    limit: Option<usize>,
+    screen_name: String,
+}
+
+/// Print a list of all users who follow you
+#[derive(Clap)]
+struct ListFollowers {
+    /// Print only the user's ID (by default you get the ID and screen name)
+    #[clap(short = 'i', long)]
+    ids_only: bool,
+}
+
+/// Print a list of all users you follow
+#[derive(Clap)]
+struct ListFriends {
+    /// Print only the user's ID (by default you get the ID and screen name)
+    #[clap(short = 'i', long)]
+    ids_only: bool,
+}
+
+/// Print a list of all users you've blocked
+#[derive(Clap)]
+struct ListBlocks {
+    /// Print only the user's ID (by default you get the ID and screen name)
+    #[clap(short = 'i', long)]
+    ids_only: bool,
+}
