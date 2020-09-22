@@ -1,11 +1,14 @@
 ## Overview
 
 This repository contains some low-tech tools designed to help you make Twitter a nicer place for
-yourself.
+yourself. Some of these tools might also be useful in other ways, like for
+example if some litigious person with a long history of making common cause with white
+supremacists and misogynists
+[threatens to sue you for defamation](https://meta.plasm.us/posts/2020/07/25/response-to-john-de-goes/).
 
-For example, I get a lot of hate-follows, and I generally try to block these users as quickly as
-possible. One of the things this project provides is a command-line tool that takes a Twitter screen
-name and lists all of the accounts you've blocked that that account follows:
+One of the things this project provides is a command-line tool that takes a Twitter screen
+name and outputs a list of all of the accounts you've blocked that that account follows (sorted
+here by follower count):
 
 ```
 $ cargo build --release
@@ -24,11 +27,15 @@ $ target/release/twcc blocked-follows sfscala
 ...
 ```
 
-This makes it much easier to decide which new followers you need to block (it's like a version of
-Twitter's "Followed by … and 123 others you follow" that's actually useful).
+I get a lot of hate-follows, and this tool makes it much easier for me to decide which new followers
+I need to block. It's like a version of Twitter's "Followed by… and 123 others you follow" that's
+actually useful.
 
-The same CLI also provides a way to search the [Wayback Machine](https://web.archive.org/) for
-deleted tweets by a specified user:
+I sometimes work in a [certain programming language community](https://www.scala-lang.org) where
+prominent community members have a tendency to say abusive
+or exclusionary things and then delete and deny everything when they're confronted, so the CLI also
+provides a way to search the [Wayback Machine](https://web.archive.org/) for deleted tweets by a
+specified user:
 
 ```
 $ target/release/twcc deleted-tweets --enable-browser --limit 100 jdegoes
@@ -121,3 +128,8 @@ Most of these things are excluded for one of the following reasons:
 * They probably technically violate some ToS somewhere.
 
 I might add some of them eventually.
+
+Nothing here is very polished or robust. These applications don't keep track of rate limits, for
+example, so if you run out of requests for an endpoint, they'll just crash, and
+you'll have to wait. I might try to smooth out some of these rough edges at some
+point, but it's unlikely.
