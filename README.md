@@ -37,12 +37,16 @@ https://web.archive.org/web/20190923221242/https://twitter.com/jdegoes/status/11
 https://web.archive.org/web/20200526150339/https://twitter.com/jdegoes/status/1265251872048320513
 ```
 
+(In this case we've limited the search to the 100 tweets most recently archived by the Wayback
+Machine.)
+
 It can also print a list of everyone you currently block, follow, or are followed by, it can get the
 URL of a deleted tweet from the URL of a reply, and it can partition a list of tweet IDs by their
 deleted status.
 
 ```
-cancelculture 0.1.0
+$ target/release/twcc --help
+twcc 0.1.0
 Travis Brown <travisrobertbrown@gmail.com>
 
 USAGE:
@@ -69,8 +73,8 @@ SUBCOMMANDS:
     deleted-tweets     Lists Wayback Machine URLs for all deleted tweets by a user
     help               Prints this message or the help of the given subcommand(s)
     list-blocks        Print a list of all users you've blocked
-    list-followers     Print a list of all users who follow you
-    list-friends       Print a list of all users you follow
+    list-followers     Print a list of all users who follow you (or someone else)
+    list-friends       Print a list of all users you (or someone else) follows
     lookup-reply       Get the URL of a tweet given the URL or status ID of a reply
 ```
 

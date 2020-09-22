@@ -13,10 +13,13 @@ async fn main() -> Result<()> {
     let client = Client::from_config_file(&opts.key_file).await?;
 
     match opts.command {
-        SubCommand::ListFollowers(ListFollowers { ids_only, screen_name }) => {
+        SubCommand::ListFollowers(ListFollowers {
+            ids_only,
+            screen_name,
+        }) => {
             let ids = match screen_name {
                 Some(name) => client.followers(name).await?,
-                None => client.followers_self().await?
+                None => client.followers_self().await?,
             };
 
             if ids_only {
@@ -29,10 +32,13 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
-        SubCommand::ListFriends(ListFriends { ids_only, screen_name }) => {
+        SubCommand::ListFriends(ListFriends {
+            ids_only,
+            screen_name,
+        }) => {
             let ids = match screen_name {
                 Some(name) => client.friends(name).await?,
-                None => client.friends_self().await?
+                None => client.friends_self().await?,
             };
 
             if ids_only {
@@ -207,7 +213,7 @@ fn print_user_report(users: &[TwitterUser]) {
 }
 
 #[derive(Clap)]
-#[clap(version = crate_version!(), author = crate_authors!())]
+#[clap(name = "twcc", version = crate_version!(), author = crate_authors!())]
 struct Opts {
     /// TOML file containing Twitter API keys
     #[clap(short, long, default_value = "keys.toml")]
@@ -276,7 +282,7 @@ struct DeletedTweets {
     screen_name: String,
 }
 
-/// Print a list of all users who follow you
+/// Print a list of all users who follow you (or someone else)
 #[derive(Clap)]
 struct ListFollowers {
     /// Print only the user's ID (by default you get the ID and screen name)
@@ -284,11 +290,10 @@ struct ListFollowers {
     ids_only: bool,
     /// The user to list followers of (by default yourself)
     #[clap(short = 'u', long)]
-    screen_name: Option<String>
-
+    screen_name: Option<String>,
 }
 
-/// Print a list of all users you follow
+/// Print a list of all users you (or someone else) follows
 #[derive(Clap)]
 struct ListFriends {
     /// Print only the user's ID (by default you get the ID and screen name)
@@ -296,7 +301,7 @@ struct ListFriends {
     ids_only: bool,
     /// The user to list friends of (by default yourself)
     #[clap(short = 'u', long)]
-    screen_name: Option<String>
+    screen_name: Option<String>,
 }
 
 /// Print a list of all users you've blocked
