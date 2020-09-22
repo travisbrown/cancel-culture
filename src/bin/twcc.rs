@@ -3,7 +3,6 @@ use cancelculture::twitter::{Client, Error, Result};
 use cancelculture::wayback;
 use clap::{crate_authors, crate_version, Clap};
 use egg_mode::user::TwitterUser;
-use fantoccini::Client as FClient;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
@@ -95,7 +94,7 @@ async fn main() -> Result<()> {
 
             Ok(())
         }
-        SubCommand::CheckExistence(CheckExistence { enable_browser }) => {
+        SubCommand::CheckExistence => {
             let stdin = std::io::stdin();
             let mut buffer = String::new();
             let mut handle = stdin.lock();
@@ -105,12 +104,7 @@ async fn main() -> Result<()> {
                 .split_whitespace()
                 .flat_map(|input| input.parse::<u64>().ok());
 
-            let mut fallback_client = if enable_browser {
-                Some(create_browser(&opts).await)
-            } else {
-                None
-            };
-            let status_map = client.statuses_exist(ids, fallback_client.as_mut()).await?;
+            let status_map = client.statuses_exist(ids).await?;
             let mut missing = status_map.into_iter().collect::<Vec<_>>();
             missing.sort_unstable();
 
@@ -121,7 +115,6 @@ async fn main() -> Result<()> {
             Ok(())
         }
         SubCommand::DeletedTweets(DeletedTweets {
-            enable_browser,
             limit,
             ref screen_name,
         }) => {
@@ -165,15 +158,7 @@ async fn main() -> Result<()> {
                 }
             }
 
-            let mut fallback_client = if enable_browser {
-                Some(create_browser(&opts).await)
-            } else {
-                None
-            };
-
-            let deleted_status = client
-                .statuses_exist(by_id.iter().map(|(k, _)| *k), fallback_client.as_mut())
-                .await?;
+            let deleted_status = client.statuses_exist(by_id.iter().map(|(k, _)| *k)).await?;
 
             let mut deleted = deleted_status
                 .into_iter()
@@ -196,16 +181,6 @@ async fn main() -> Result<()> {
     }
 }
 
-async fn create_browser(opts: &Opts) -> FClient {
-    cancelculture::browser::make_client_or_panic(
-        &opts.webdriver_browser,
-        !opts.webdriver_disable_headless,
-        opts.webdriver_host.as_deref(),
-        opts.webdriver_port,
-    )
-    .await
-}
-
 fn print_user_report(users: &[TwitterUser]) {
     for user in users {
         println!("{} {} {}", user.id, user.screen_name, user.followers_count);
@@ -218,18 +193,6 @@ struct Opts {
     /// TOML file containing Twitter API keys
     #[clap(short, long, default_value = "keys.toml")]
     key_file: String,
-    /// Host for Webdriver server
-    #[clap(short = 'h', long)]
-    webdriver_host: Option<String>,
-    /// Port for Webdriver server
-    #[clap(short = 'p', long)]
-    webdriver_port: Option<u16>,
-    /// Force Webdriver server not to use headless mode
-    #[clap(long)]
-    webdriver_disable_headless: bool,
-    /// Specify Webdriver implementation
-    #[clap(short = 'b', long, default_value = "chrome")]
-    webdriver_browser: String,
     #[clap(subcommand)]
     command: SubCommand,
 }
@@ -240,8 +203,9 @@ enum SubCommand {
     BlockedFollows(BlockedFollows),
     #[clap(version = crate_version!(), author = crate_authors!())]
     LookupReply(LookupReply),
+    /// Checks whether a list of status IDs (from stdin) still exist
     #[clap(version = crate_version!(), author = crate_authors!())]
-    CheckExistence(CheckExistence),
+    CheckExistence,
     #[clap(version = crate_version!(), author = crate_authors!())]
     DeletedTweets(DeletedTweets),
     #[clap(version = crate_version!(), author = crate_authors!())]
@@ -264,18 +228,9 @@ struct BlockedFollows {
     screen_name: String,
 }
 
-/// Checks whether a list of status IDs (from stdin) still exist
-#[derive(Clap)]
-struct CheckExistence {
-    #[clap(short = 'e', long)]
-    enable_browser: bool,
-}
-
 /// Lists Wayback Machine URLs for all deleted tweets by a user
 #[derive(Clap)]
 struct DeletedTweets {
-    #[clap(short = 'e', long)]
-    enable_browser: bool,
     #[clap(short = 'l', long)]
     /// Only check the tweets the Wayback Machine most recently knows about
     limit: Option<usize>,

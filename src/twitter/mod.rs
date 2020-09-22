@@ -1,6 +1,5 @@
 use egg_mode::user::{TwitterUser, UserID};
 use egg_mode::{KeyPair, Token};
-use fantoccini::Client as FClient;
 use futures::TryStreamExt;
 use regex::Regex;
 use serde_derive::Deserialize;
@@ -88,12 +87,13 @@ struct UserCache {
 
 pub struct Client {
     token: Token,
+    app_token: Token,
     user: TwitterUser,
     user_cache: Arc<RwLock<UserCache>>,
 }
 
 impl Client {
-    fn new(token: Token, user: TwitterUser) -> Client {
+    fn new(token: Token, app_token: Token, user: TwitterUser) -> Client {
         let mut user_cache = UserCache::default();
 
         user_cache
@@ -106,6 +106,7 @@ impl Client {
 
         Client {
             token,
+            app_token,
             user,
             user_cache: Arc::new(RwLock::new(user_cache)),
         }
@@ -115,9 +116,10 @@ impl Client {
         consumer: KeyPair,
         access: KeyPair,
     ) -> result::Result<Client, egg_mode::error::Error> {
+        let app_token = egg_mode::auth::bearer_token(&consumer).await?;
         let token = Token::Access { consumer, access };
         let user = egg_mode::auth::verify_tokens(&token).await?.response;
-        Ok(Client::new(token, user))
+        Ok(Client::new(token, app_token, user))
     }
 
     pub async fn from_config_file(path: &str) -> Result<Client> {
@@ -182,14 +184,13 @@ impl Client {
     pub async fn statuses_exist<I: IntoIterator<Item = u64>>(
         &self,
         ids: I,
-        fallback_client: Option<&mut FClient>,
     ) -> Result<HashMap<u64, bool>> {
         let mut status_map = HashMap::new();
         let ids_vec = ids.into_iter().collect::<Vec<u64>>();
         let chunks = ids_vec.chunks(100);
 
         for chunk in chunks {
-            let m = egg_mode::tweet::lookup_map(chunk.to_vec(), &self.token)
+            let m = egg_mode::tweet::lookup_map(chunk.to_vec(), &self.app_token)
                 .await?
                 .response;
 
@@ -198,25 +199,7 @@ impl Client {
             }
         }
 
-        match fallback_client {
-            Some(client) => {
-                let mut res = HashMap::new();
-
-                for (k, v) in status_map.iter() {
-                    if v.is_some() {
-                        res.insert(*k, true);
-                    } else {
-                        res.insert(
-                            *k,
-                            crate::browser::twitter::status_exists(client, *k).await?,
-                        );
-                    }
-                }
-
-                Ok(res)
-            }
-            None => Ok(status_map.iter().map(|(k, v)| (*k, v.is_some())).collect()),
-        }
+        Ok(status_map.iter().map(|(k, v)| (*k, v.is_some())).collect())
     }
 
     pub async fn lookup_users(&self, ids: &[u64]) -> Result<Vec<TwitterUser>> {

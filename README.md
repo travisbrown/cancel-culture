@@ -38,7 +38,7 @@ provides a way to search the [Wayback Machine](https://web.archive.org/) for del
 specified user:
 
 ```
-$ target/release/twcc deleted-tweets --enable-browser --limit 100 jdegoes
+$ target/release/twcc deleted-tweets --limit 100 jdegoes
 https://web.archive.org/web/20190922222236/https://twitter.com/jdegoes/status/1170420726400212997
 https://web.archive.org/web/20190923221242/https://twitter.com/jdegoes/status/1170711737361940481
 https://web.archive.org/web/20200526150339/https://twitter.com/jdegoes/status/1265251872048320513
@@ -52,27 +52,18 @@ URL of a deleted tweet from the URL of a reply, and it can partition a list of t
 deleted status.
 
 ```
-$ target/release/twcc --help
 twcc 0.1.0
 Travis Brown <travisrobertbrown@gmail.com>
 
 USAGE:
-    twcc [FLAGS] [OPTIONS] <SUBCOMMAND>
+    twcc [OPTIONS] <SUBCOMMAND>
 
 FLAGS:
-        --help                          Prints help information
-    -V, --version                       Prints version information
-        --webdriver-disable-headless    Force Webdriver server not to use headless mode
+    -h, --help       Prints help information
+    -V, --version    Prints version information
 
 OPTIONS:
-    -k, --key-file <key-file>
-            TOML file containing Twitter API keys [default: keys.toml]
-
-    -b, --webdriver-browser <webdriver-browser>
-            Specify Webdriver implementation [default: chrome]
-
-    -h, --webdriver-host <webdriver-host>          Host for Webdriver server
-    -p, --webdriver-port <webdriver-port>          Port for Webdriver server
+    -k, --key-file <key-file>    TOML file containing Twitter API keys [default: keys.toml]
 
 SUBCOMMANDS:
     blocked-follows    For a given user, list everyone they follow who you block
@@ -105,10 +96,8 @@ accessToken="****"
 accessTokenSecret="****"
 ```
 
-Some commands (and other applications) optionally require a
-[WebDriver](https://www.w3.org/TR/webdriver/)
-server instead of (or in addition to) API access. These should work with either
-[ChromeDriver](https://chromedriver.chromium.org/) or
+Some of the other tools require a [WebDriver](https://www.w3.org/TR/webdriver/) server instead of
+API access. These should work with either [ChromeDriver](https://chromedriver.chromium.org/) or
 [GeckoDriver](https://github.com/mozilla/geckodriver).
 
 ## Other
