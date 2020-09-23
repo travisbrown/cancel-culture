@@ -268,11 +268,10 @@ impl Client {
         let mut res = Vec::with_capacity(ids.len());
 
         for id in ids {
-            let user = writeable_cache
-                .by_id
-                .get(id)
-                .ok_or(Error::MissingUserError(*id))?;
-            res.push(user.clone());
+            // The blocks endpoint may return IDs for users that no longer exist, so we ignore empty values here.
+            if let Some(user) = writeable_cache.by_id.get(id) {
+                res.push(user.clone());
+            }
         }
 
         Ok(res)
