@@ -1,3 +1,4 @@
+use egg_mode::tweet::Timeline;
 use egg_mode::user::{TwitterUser, UserID};
 use egg_mode::{KeyPair, Token};
 use futures::TryStreamExt;
@@ -143,6 +144,39 @@ impl Client {
             .map_ok(|r| r.response)
             .try_collect()
             .await
+    }
+
+    async fn timeline_to_vec(&self, timeline: Timeline) -> EggModeResult<Vec<u64>> {
+        let mut res = Vec::with_capacity(3200);
+        let (mut timeline, mut tweets) = timeline.start().await?;
+
+        while !tweets.response.is_empty() {
+            res.extend(
+                tweets
+                    .response
+                    .iter()
+                    .map(|tweet| tweet.id)
+                    .collect::<Vec<_>>(),
+            );
+            let (new_timeline, new_tweets) = timeline.older(None).await?;
+            timeline = new_timeline;
+            tweets = new_tweets;
+        }
+
+        Ok(res)
+    }
+
+    pub async fn tweets<T: Into<UserID>>(
+        &self,
+        acct: T,
+        with_replies: bool,
+        with_rts: bool,
+    ) -> EggModeResult<Vec<u64>> {
+        self.timeline_to_vec(
+            egg_mode::tweet::user_timeline(acct, with_replies, with_rts, &self.app_token)
+                .with_page_size(200),
+        )
+        .await
     }
 
     pub async fn friends<T: Into<UserID>>(&self, acct: T) -> EggModeResult<Vec<u64>> {

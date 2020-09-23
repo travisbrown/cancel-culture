@@ -73,6 +73,7 @@ SUBCOMMANDS:
     list-blocks        Print a list of all users you've blocked
     list-followers     Print a list of all users who follow you (or someone else)
     list-friends       Print a list of all users you (or someone else) follows
+    list-tweets        Print a list of (up to approximately 3200) tweet IDs for a user
     lookup-reply       Get the URL of a tweet given the URL or status ID of a reply
 ```
 

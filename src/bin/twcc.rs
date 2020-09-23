@@ -62,6 +62,15 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
+        SubCommand::ListTweets(ListTweets { screen_name }) => {
+            let ids = client.tweets(screen_name, true, true).await?;
+
+            for id in ids {
+                println!("{}", id);
+            }
+
+            Ok(())
+        }
         SubCommand::LookupReply(LookupReply { query }) => {
             let reply_id = Client::parse_tweet_id(&query)?;
             match client.get_in_reply_to(reply_id).await? {
@@ -214,6 +223,8 @@ enum SubCommand {
     ListFriends(ListFriends),
     #[clap(version = crate_version!(), author = crate_authors!())]
     ListBlocks(ListBlocks),
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    ListTweets(ListTweets),
 }
 
 /// Get the URL of a tweet given the URL or status ID of a reply
@@ -257,6 +268,13 @@ struct ListFriends {
     /// The user to list friends of (by default yourself)
     #[clap(short = 'u', long)]
     screen_name: Option<String>,
+}
+
+/// Print a list of (up to approximately 3200) tweet IDs for a user
+#[derive(Clap)]
+struct ListTweets {
+    /// The user whose tweets you want to list
+    screen_name: String,
 }
 
 /// Print a list of all users you've blocked
