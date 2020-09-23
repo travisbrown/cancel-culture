@@ -1,6 +1,7 @@
 use egg_mode::tweet::Timeline;
 use egg_mode::user::{TwitterUser, UserID};
 use egg_mode::{KeyPair, Token};
+use futures::future::try_join_all;
 use futures::TryStreamExt;
 use regex::Regex;
 use serde_derive::Deserialize;
@@ -220,15 +221,18 @@ impl Client {
         ids: I,
     ) -> Result<HashMap<u64, bool>> {
         let mut status_map = HashMap::new();
-        let ids_vec = ids.into_iter().collect::<Vec<u64>>();
-        let chunks = ids_vec.chunks(100);
+
+        let chunks = try_join_all(
+            ids.into_iter()
+                .collect::<Vec<u64>>()
+                .chunks(100)
+                .map(|chunk| egg_mode::tweet::lookup_map(chunk.to_vec(), &self.app_token)),
+        )
+        .await?
+        .into_iter();
 
         for chunk in chunks {
-            let m = egg_mode::tweet::lookup_map(chunk.to_vec(), &self.app_token)
-                .await?
-                .response;
-
-            for (k, v) in m {
+            for (k, v) in chunk.response {
                 status_map.insert(k, v);
             }
         }
@@ -246,15 +250,16 @@ impl Client {
             .collect::<Vec<u64>>();
         drop(cache);
 
-        let chunks = unknown_ids.chunks(100);
-        let mut new_users = Vec::with_capacity(unknown_ids.len());
-
-        for chunk in chunks {
-            let batch = egg_mode::user::lookup(chunk.to_vec(), &self.token)
-                .await?
-                .response;
-            new_users.extend(batch);
-        }
+        let new_users = try_join_all(
+            unknown_ids
+                .chunks(100)
+                .map(|chunk| egg_mode::user::lookup(chunk.to_vec(), &self.token)),
+        )
+        .await?
+        .into_iter()
+        .map(|r| r.response)
+        .flatten()
+        .collect::<Vec<_>>();
 
         let mut writeable_cache = self.user_cache.write().unwrap();
 
