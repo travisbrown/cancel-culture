@@ -1,7 +1,7 @@
 ## Overview
 
 This repository contains some low-tech tools designed to help you make Twitter a nicer place for
-yourself. Some of these tools might also be useful in other ways, like for
+yourself (or should you reach the conclusion that Twitter cannot be a nice place, just close your Twitter account and you may not need the technology I offer in this repo). Some of these tools might also be useful in other ways, like for
 example if some litigious person with a long history of making common cause with white
 supremacists and misogynists
 [threatens to sue you for defamation](https://meta.plasm.us/posts/2020/07/25/response-to-john-de-goes/).
