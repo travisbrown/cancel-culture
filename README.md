@@ -77,6 +77,34 @@ SUBCOMMANDS:
     lookup-reply       Get the URL of a tweet given the URL or status ID of a reply
 ```
 
+## Tweet screenshots
+
+The `twshoot` command-line tool can take a screenshot of a tweet, given either a URL or status ID:
+
+```
+$ cargo build --release
+    Finished release [optimized] target(s) in 0.29s
+
+$ target/release/twshoot https://twitter.com/travisbrown/status/1291256191641952256
+```
+
+And then you have a `1291256191641952256.png` file in the current directory that looks like this:
+
+<p align="center">
+<img
+  alt="Liking Scala is not a personality but it does mean you're racist / Do I think this is 100% accurate or fair: no … Do I think the Scala community is capable of coming to terms with the behavior that got it this reputation: also no"
+  src="/examples/1291256191641952256.png?raw=true"
+  width="75%"
+  />
+</p>
+
+The application also generates a `-full.png` tweet showing the entire browser screen. The image
+sizes, output directory, etc. are configurable (see `twshoot --help` for details).
+
+This tool doesn't require a Twitter API account, but you do have to have
+[ChromeDriver](https://chromedriver.chromium.org/) running (it also works with GeckoDriver,
+but the results don't look as nice).
+
 ## Setup
 
 You'll need to [install Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html).
