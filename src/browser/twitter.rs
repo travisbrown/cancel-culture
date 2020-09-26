@@ -1,5 +1,6 @@
 use fantoccini::error::CmdError;
 use fantoccini::{Client, Locator};
+use std::time::Duration;
 
 const HEADING_LOC: Locator = Locator::XPath("//main//h1[@role='heading']");
 
@@ -37,4 +38,26 @@ pub async fn log_in(client: &mut Client, username: &str, password: &str) -> Resu
         .await?;
 
     is_logged_in(client).await
+}
+
+pub async fn shoot(
+    client: &mut Client,
+    status_id: u64,
+    width: u32,
+    height: u32,
+    wait_for_load: Option<Duration>,
+) -> Result<Vec<u8>, fantoccini::error::CmdError> {
+    client.set_window_size(width, height).await?;
+
+    let url = format!("https://twitter.com/tweet/status/{}", status_id);
+    client.goto(&url).await?;
+
+    let locator = fantoccini::Locator::XPath("//main//h1[@role='heading']");
+    client.wait_for_find(locator).await?;
+
+    if let Some(duration) = wait_for_load {
+        tokio::time::delay_for(duration).await;
+    }
+
+    client.screenshot().await
 }
