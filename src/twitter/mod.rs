@@ -7,6 +7,7 @@ use regex::Regex;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::default::Default;
+use std::fmt::Display;
 use std::fs;
 use std::mem::drop;
 use std::result;
@@ -49,6 +50,14 @@ pub enum Error {
     NotReplyError(u64),
     MissingUserError(u64),
 }
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> result::Result<(), std::fmt::Error> {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
+impl std::error::Error for Error {}
 
 impl From<toml::de::Error> for Error {
     fn from(e: toml::de::Error) -> Self {
