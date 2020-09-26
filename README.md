@@ -98,7 +98,7 @@ And then you have a `1291256191641952256.png` file in the current directory that
   />
 </p>
 
-The application also generates a `-full.png` tweet showing the entire browser screen. The image
+The application also generates a `-full.png` image showing the entire browser screen. The image
 sizes, output directory, etc. are configurable (see `twshoot --help` for details).
 
 This tool doesn't require a Twitter API account, but you do have to have
