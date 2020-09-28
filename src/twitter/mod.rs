@@ -1,8 +1,10 @@
-use egg_mode::tweet::Timeline;
+pub mod timeline;
+
+use egg_mode::tweet::{Timeline, Tweet};
 use egg_mode::user::{TwitterUser, UserID};
 use egg_mode::{KeyPair, Token};
 use futures::future::try_join_all;
-use futures::TryStreamExt;
+use futures::{Stream, TryStreamExt};
 use regex::Regex;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
@@ -10,8 +12,10 @@ use std::default::Default;
 use std::fmt::Display;
 use std::fs;
 use std::mem::drop;
+use std::pin::Pin;
 use std::result;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 #[derive(Deserialize)]
 struct Config {
@@ -289,6 +293,16 @@ impl Client {
         }
 
         Ok(res)
+    }
+
+    pub fn user_timeline_stream<T: Into<UserID>>(
+        &self,
+        user: T,
+        wait: Duration,
+    ) -> Pin<Box<dyn Stream<Item = egg_mode::error::Result<Tweet>>>> {
+        let timeline = egg_mode::tweet::user_timeline(user, true, true, &self.app_token);
+
+        timeline::TimelineStream::make(timeline, wait)
     }
 }
 
