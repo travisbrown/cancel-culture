@@ -1,19 +1,26 @@
+mod error;
+mod method;
+mod rate_limited;
+pub mod store;
 pub mod timeline;
 
+pub use error::Error;
+pub use method::Method;
+
+use egg_mode::cursor::IDCursor;
 use egg_mode::tweet::{Timeline, Tweet};
 use egg_mode::user::{TwitterUser, UserID};
 use egg_mode::{KeyPair, Token};
 use futures::future::try_join_all;
 use futures::{Stream, TryStreamExt};
+use rate_limited::{RateLimitedClient, RateLimitedStream};
 use regex::Regex;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::default::Default;
-use std::fmt::Display;
 use std::fs;
 use std::mem::drop;
 use std::pin::Pin;
-use std::result;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -43,56 +50,6 @@ impl TwitterConfig {
 pub type Result<T> = std::result::Result<T, Error>;
 pub type EggModeResult<T> = std::result::Result<T, egg_mode::error::Error>;
 
-#[derive(Debug)]
-pub enum Error {
-    ConfigParseError(toml::de::Error),
-    ConfigReadError(std::io::Error),
-    ApiError(egg_mode::error::Error),
-    BrowserError(fantoccini::error::CmdError),
-    HttpClientError(reqwest::Error),
-    TweetIDParseError(String),
-    NotReplyError(u64),
-    MissingUserError(u64),
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> result::Result<(), std::fmt::Error> {
-        std::fmt::Debug::fmt(self, f)
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<toml::de::Error> for Error {
-    fn from(e: toml::de::Error) -> Self {
-        Error::ConfigParseError(e)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Error::ConfigReadError(e)
-    }
-}
-
-impl From<egg_mode::error::Error> for Error {
-    fn from(e: egg_mode::error::Error) -> Self {
-        Error::ApiError(e)
-    }
-}
-
-impl From<fantoccini::error::CmdError> for Error {
-    fn from(e: fantoccini::error::CmdError) -> Self {
-        Error::BrowserError(e)
-    }
-}
-
-impl From<reqwest::Error> for Error {
-    fn from(e: reqwest::Error) -> Self {
-        Error::HttpClientError(e)
-    }
-}
-
 #[derive(Default)]
 struct UserCache {
     by_id: HashMap<u64, TwitterUser>,
@@ -105,10 +62,15 @@ pub struct Client {
     app_token: Token,
     user: TwitterUser,
     user_cache: Arc<RwLock<UserCache>>,
+    app_limited_client: RateLimitedClient,
 }
 
 impl Client {
-    fn new(token: Token, app_token: Token, user: TwitterUser) -> Client {
+    async fn new(
+        token: Token,
+        app_token: Token,
+        user: TwitterUser,
+    ) -> egg_mode::error::Result<Client> {
         let mut user_cache = UserCache::default();
 
         user_cache
@@ -119,22 +81,25 @@ impl Client {
             .insert(user.id, user.screen_name.clone());
         user_cache.by_id.insert(user.id, user.clone());
 
-        Client {
+        let app_limited_client = RateLimitedClient::new(app_token.clone(), false).await?;
+
+        Ok(Client {
             token,
             app_token,
             user,
             user_cache: Arc::new(RwLock::new(user_cache)),
-        }
+            app_limited_client,
+        })
     }
 
     pub async fn from_key_pairs(
         consumer: KeyPair,
         access: KeyPair,
-    ) -> result::Result<Client, egg_mode::error::Error> {
+    ) -> std::result::Result<Client, egg_mode::error::Error> {
         let app_token = egg_mode::auth::bearer_token(&consumer).await?;
         let token = Token::Access { consumer, access };
         let user = egg_mode::auth::verify_tokens(&token).await?.response;
-        Ok(Client::new(token, app_token, user))
+        Client::new(token, app_token, user).await
     }
 
     pub async fn from_config_file(path: &str) -> Result<Client> {
@@ -205,8 +170,22 @@ impl Client {
         self.friends(self.user.id).await
     }
 
+    pub fn follower_stream<T: Into<UserID>>(&self, acct: T) -> RateLimitedStream<IDCursor> {
+        let cursor = egg_mode::user::followers_ids(acct, &self.app_token).with_page_size(5000);
+
+        self.app_limited_client
+            .make_stream(Method::USER_FOLLOWER_IDS, cursor)
+    }
+
+    pub fn followed_stream<T: Into<UserID>>(&self, acct: T) -> RateLimitedStream<IDCursor> {
+        let cursor = egg_mode::user::friends_ids(acct, &self.app_token).with_page_size(5000);
+
+        self.app_limited_client
+            .make_stream(Method::USER_FOLLOWED_IDS, cursor)
+    }
+
     pub async fn followers<T: Into<UserID>>(&self, acct: T) -> EggModeResult<Vec<u64>> {
-        egg_mode::user::followers_ids(acct, &self.token)
+        egg_mode::user::followers_ids(acct, &self.app_token)
             .with_page_size(5000)
             .map_ok(|r| r.response)
             .try_collect()
