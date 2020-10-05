@@ -3,6 +3,7 @@ use cancelculture::twitter::{Client, Error, Result};
 use cancelculture::wayback;
 use clap::{crate_authors, crate_version, Clap};
 use egg_mode::user::TwitterUser;
+use futures::TryStreamExt;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
@@ -17,8 +18,8 @@ async fn main() -> Result<()> {
             screen_name,
         }) => {
             let ids = match screen_name {
-                Some(name) => client.followers(name).await?,
-                None => client.followers_self().await?,
+                Some(name) => client.follower_ids(name).try_collect::<Vec<_>>().await?,
+                None => client.follower_ids_self().try_collect::<Vec<_>>().await?,
             };
 
             if ids_only {
@@ -26,7 +27,7 @@ async fn main() -> Result<()> {
                     println!("{}", id);
                 }
             } else {
-                let users = client.lookup_users(&ids).await?;
+                let users = client.lookup_users(ids).try_collect::<Vec<_>>().await?;
                 print_user_report(&users);
             }
             Ok(())
@@ -36,8 +37,8 @@ async fn main() -> Result<()> {
             screen_name,
         }) => {
             let ids = match screen_name {
-                Some(name) => client.friends(name).await?,
-                None => client.friends_self().await?,
+                Some(name) => client.followed_ids(name).try_collect::<Vec<_>>().await?,
+                None => client.followed_ids_self().try_collect::<Vec<_>>().await?,
             };
 
             if ids_only {
@@ -45,7 +46,7 @@ async fn main() -> Result<()> {
                     println!("{}", id);
                 }
             } else {
-                let users = client.lookup_users(&ids).await?;
+                let users = client.lookup_users(ids).try_collect::<Vec<_>>().await?;
                 print_user_report(&users);
             }
             Ok(())
@@ -57,7 +58,7 @@ async fn main() -> Result<()> {
                     println!("{}", id);
                 }
             } else {
-                let users = client.lookup_users(&ids).await?;
+                let users = client.lookup_users(ids).try_collect::<Vec<_>>().await?;
                 print_user_report(&users);
             }
             Ok(())
@@ -84,7 +85,8 @@ async fn main() -> Result<()> {
         SubCommand::BlockedFollows(BlockedFollows { screen_name }) => {
             let blocks = client.blocks().await?.into_iter().collect::<HashSet<u64>>();
             let blocked_friends = client
-                .friends(screen_name.clone())
+                .followed_ids(screen_name.clone())
+                .try_collect::<Vec<_>>()
                 .await?
                 .into_iter()
                 .filter(|id| blocks.contains(id))
@@ -93,7 +95,10 @@ async fn main() -> Result<()> {
             if blocked_friends.is_empty() {
                 eprintln!("{} does not follow anyone you've blocked", screen_name);
             } else {
-                let mut blocked_follows = client.lookup_users(&blocked_friends).await?;
+                let mut blocked_follows = client
+                    .lookup_users(blocked_friends)
+                    .try_collect::<Vec<_>>()
+                    .await?;
                 blocked_follows.sort_by_key(|u| -u.followers_count);
 
                 for user in blocked_follows {
