@@ -1,3 +1,4 @@
+use egg_mode::Response;
 use egg_mode::error::Result;
 use egg_mode::tweet::{Timeline, Tweet};
 use futures::{FutureExt, Stream, StreamExt, TryStreamExt};
@@ -7,7 +8,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::time::delay_for;
 
-type TimelineResult = Result<(Timeline, egg_mode::Response<Vec<Tweet>>)>;
+type TimelineResult = Result<(Timeline, Response<Vec<Tweet>>)>;
 
 pub struct TimelineStream {
     underlying: Pin<Box<dyn Future<Output = TimelineResult>>>,

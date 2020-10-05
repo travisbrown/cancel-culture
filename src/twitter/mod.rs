@@ -287,7 +287,7 @@ impl Client {
         &self,
         user: T,
         wait: Duration,
-    ) -> Pin<Box<dyn Stream<Item = egg_mode::error::Result<Tweet>>>> {
+    ) -> Pin<Box<dyn Stream<Item = EggModeResult<Tweet>>>> {
         let timeline = egg_mode::tweet::user_timeline(user, true, true, &self.app_token);
 
         timeline::TimelineStream::make(timeline, wait)
