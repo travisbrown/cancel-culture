@@ -1,18 +1,17 @@
 mod error;
 mod method;
 mod rate_limited;
-pub mod store;
 pub mod timeline;
 
 pub use error::Error;
 pub use method::Method;
 
-use egg_mode::cursor::IDCursor;
+use egg_mode::cursor::{CursorIter, IDCursor};
 use egg_mode::tweet::{Timeline, Tweet};
 use egg_mode::user::{TwitterUser, UserID};
-use egg_mode::{KeyPair, Token};
+use egg_mode::{KeyPair, Response, Token};
 use futures::future::try_join_all;
-use futures::{Stream, TryStreamExt};
+use futures::{Future, FutureExt, Stream, TryStreamExt};
 use rate_limited::{RateLimitedClient, RateLimitedStream};
 use regex::Regex;
 use serde_derive::Deserialize;
@@ -49,6 +48,7 @@ impl TwitterConfig {
 
 pub type Result<T> = std::result::Result<T, Error>;
 pub type EggModeResult<T> = std::result::Result<T, egg_mode::error::Error>;
+type ResponseFuture<'a, T> = Pin<Box<dyn Future<Output = EggModeResult<Response<T>>> + 'a>>;
 
 #[derive(Default)]
 struct UserCache {
@@ -81,7 +81,7 @@ impl Client {
             .insert(user.id, user.screen_name.clone());
         user_cache.by_id.insert(user.id, user.clone());
 
-        let app_limited_client = RateLimitedClient::new(app_token.clone(), false).await?;
+        let app_limited_client = RateLimitedClient::new(app_token.clone()).await?;
 
         Ok(Client {
             token,
@@ -157,43 +157,52 @@ impl Client {
         )
         .await
     }
-
-    pub async fn friends<T: Into<UserID>>(&self, acct: T) -> EggModeResult<Vec<u64>> {
-        egg_mode::user::friends_ids(acct, &self.token)
-            .with_page_size(5000)
-            .map_ok(|r| r.response)
-            .try_collect()
-            .await
-    }
-
-    pub async fn friends_self(&self) -> EggModeResult<Vec<u64>> {
-        self.friends(self.user.id).await
-    }
-
-    pub fn follower_stream<T: Into<UserID>>(&self, acct: T) -> RateLimitedStream<IDCursor> {
+    pub fn follower_ids<T: Into<UserID>>(
+        &self,
+        acct: T,
+    ) -> RateLimitedStream<'static, CursorIter<IDCursor>> {
         let cursor = egg_mode::user::followers_ids(acct, &self.app_token).with_page_size(5000);
 
         self.app_limited_client
-            .make_stream(Method::USER_FOLLOWER_IDS, cursor)
+            .cursor_stream(Method::USER_FOLLOWER_IDS, cursor)
     }
 
-    pub fn followed_stream<T: Into<UserID>>(&self, acct: T) -> RateLimitedStream<IDCursor> {
+    pub fn followed_ids<T: Into<UserID>>(
+        &self,
+        acct: T,
+    ) -> RateLimitedStream<'static, CursorIter<IDCursor>> {
         let cursor = egg_mode::user::friends_ids(acct, &self.app_token).with_page_size(5000);
 
         self.app_limited_client
-            .make_stream(Method::USER_FOLLOWED_IDS, cursor)
+            .cursor_stream(Method::USER_FOLLOWED_IDS, cursor)
     }
 
-    pub async fn followers<T: Into<UserID>>(&self, acct: T) -> EggModeResult<Vec<u64>> {
-        egg_mode::user::followers_ids(acct, &self.app_token)
-            .with_page_size(5000)
-            .map_ok(|r| r.response)
-            .try_collect()
-            .await
+    pub fn follower_ids_self(&self) -> RateLimitedStream<'static, CursorIter<IDCursor>> {
+        self.follower_ids(self.user.id)
     }
 
-    pub async fn followers_self(&self) -> EggModeResult<Vec<u64>> {
-        self.followers(self.user.id).await
+    pub fn followed_ids_self(&self) -> RateLimitedStream<'static, CursorIter<IDCursor>> {
+        self.followed_ids(self.user.id)
+    }
+
+    pub fn lookup_users<'a, T, I: IntoIterator<Item = T>>(
+        &'a self,
+        ids: I,
+    ) -> impl Stream<Item = EggModeResult<TwitterUser>> + 'a
+    where
+        T: Into<UserID> + Unpin + Send,
+    {
+        let mut futs = vec![];
+
+        let user_ids = ids.into_iter().map(Into::into).collect::<Vec<UserID>>();
+        let chunks = user_ids.chunks(100);
+
+        for chunk in chunks {
+            futs.push(egg_mode::user::lookup(chunk.to_vec(), &self.app_token).boxed_local());
+        }
+
+        self.app_limited_client
+            .futures_stream(Method::USER_LOOKUP, futs.into_iter())
     }
 
     pub async fn get_in_reply_to(&self, id: u64) -> EggModeResult<Option<(String, u64)>> {
@@ -232,7 +241,7 @@ impl Client {
         Ok(status_map.iter().map(|(k, v)| (*k, v.is_some())).collect())
     }
 
-    pub async fn lookup_users(&self, ids: &[u64]) -> Result<Vec<TwitterUser>> {
+    pub async fn lookup_users_cached(&self, ids: &[u64]) -> Result<Vec<TwitterUser>> {
         let cache = self.user_cache.read().unwrap();
 
         let unknown_ids = ids

@@ -1,2 +1,5 @@
+/bin
 /target
+/tmp
 keys.toml
+twitter.db
