@@ -1,6 +1,7 @@
 mod error;
 mod method;
 mod rate_limited;
+pub mod store;
 pub mod timeline;
 
 pub use error::Error;
