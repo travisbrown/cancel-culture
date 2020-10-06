@@ -2,7 +2,7 @@ mod future;
 mod method_limit;
 mod stream;
 
-pub use stream::RateLimitedStream;
+pub use stream::{RateLimitedStream, TimelineScrollback};
 
 use super::{Method, ResponseFuture};
 use method_limit::{MethodLimit, MethodLimits};
@@ -10,6 +10,7 @@ use method_limit::{MethodLimit, MethodLimits};
 use egg_mode::cursor::{Cursor, CursorIter};
 use egg_mode::error::Result;
 use egg_mode::service::rate_limit_status;
+use egg_mode::tweet::Timeline;
 use egg_mode::Token;
 use serde::de::DeserializeOwned;
 use std::iter::Peekable;
@@ -43,5 +44,13 @@ impl RateLimitedClient {
         iterator: I,
     ) -> RateLimitedStream<'a, Peekable<I>> {
         RateLimitedStream::new(iterator.peekable(), self.limits.get(method))
+    }
+
+    pub(crate) fn timeline_scrollback_stream(
+        &self,
+        method: &Method,
+        timeline: Timeline,
+    ) -> RateLimitedStream<'static, TimelineScrollback> {
+        RateLimitedStream::new(TimelineScrollback::new(timeline), self.limits.get(method))
     }
 }

@@ -4,8 +4,9 @@ use super::MethodLimit;
 use chrono::{TimeZone, Utc};
 use egg_mode::cursor::{Cursor, CursorIter};
 use egg_mode::error::Result;
+use egg_mode::tweet::{Timeline, Tweet};
 use egg_mode::Response;
-use futures::{Future, Stream};
+use futures::{Future, Stream, TryFutureExt};
 use log::warn;
 use serde::de::DeserializeOwned;
 use std::iter::Peekable;
@@ -19,7 +20,7 @@ pub trait Loader<'a> {
     type Page;
 
     fn load(&mut self) -> ResponseFuture<'a, Self::Page>;
-    fn update(&mut self, response: &Response<Self::Page>);
+    fn update(&mut self, response: &mut Response<Self::Page>);
     fn extract(page: Self::Page) -> Vec<Self::Item>;
     fn is_done(&mut self) -> bool;
 }
@@ -31,7 +32,7 @@ impl<'a, T: 'static, I: Iterator<Item = ResponseFuture<'a, Vec<T>>>> Loader<'a> 
     fn load(&mut self) -> ResponseFuture<'a, Self::Page> {
         self.next().unwrap()
     }
-    fn update(&mut self, _response: &Response<Self::Page>) {}
+    fn update(&mut self, _response: &mut Response<Self::Page>) {}
     fn extract(page: Self::Page) -> Vec<Self::Item> {
         page
     }
@@ -47,7 +48,7 @@ impl<T: Cursor + DeserializeOwned + 'static> Loader<'static> for CursorIter<T> {
     fn load(&mut self) -> ResponseFuture<'static, Self::Page> {
         Box::pin(self.call())
     }
-    fn update(&mut self, response: &Response<Self::Page>) {
+    fn update(&mut self, response: &mut Response<Self::Page>) {
         self.previous_cursor = response.previous_cursor_id();
         self.next_cursor = response.next_cursor_id();
     }
@@ -56,6 +57,57 @@ impl<T: Cursor + DeserializeOwned + 'static> Loader<'static> for CursorIter<T> {
     }
     fn is_done(&mut self) -> bool {
         self.next_cursor == 0
+    }
+}
+
+pub struct TimelineScrollback {
+    timeline: Option<Timeline>,
+    is_started: bool,
+    is_done: bool,
+}
+
+impl TimelineScrollback {
+    pub fn new(timeline: Timeline) -> TimelineScrollback {
+        TimelineScrollback {
+            timeline: Some(timeline),
+            is_started: false,
+            is_done: false,
+        }
+    }
+}
+
+impl Loader<'static> for TimelineScrollback {
+    type Item = Tweet;
+    type Page = (Option<Timeline>, Vec<Tweet>);
+
+    fn load(&mut self) -> ResponseFuture<'static, Self::Page> {
+        if let Some(timeline) = self.timeline.take() {
+            if self.is_started {
+                Box::pin(timeline.older(None).map_ok(|(timeline, response)| {
+                    Response::map(response, |tweets| (Some(timeline), tweets))
+                }))
+            } else {
+                self.is_started = true;
+                Box::pin(timeline.start().map_ok(|(timeline, response)| {
+                    Response::map(response, |tweets| (Some(timeline), tweets))
+                }))
+            }
+        } else {
+            // This shouldn't happen.
+            Box::pin(futures::future::err(
+                egg_mode::error::Error::InvalidResponse("Problem retrieving timeline", None),
+            ))
+        }
+    }
+    fn update(&mut self, response: &mut Response<Self::Page>) {
+        self.timeline = response.response.0.take();
+        self.is_done = response.response.1.is_empty();
+    }
+    fn extract(page: Self::Page) -> Vec<Self::Item> {
+        page.1
+    }
+    fn is_done(&mut self) -> bool {
+        self.is_done
     }
 }
 
@@ -102,13 +154,15 @@ impl<'a, L: Loader<'a> + Unpin> Stream for RateLimitedStream<'a, L> {
                         self.state = Some(state);
                         Poll::Pending
                     }
-                    Poll::Ready(Ok(res)) => {
-                        self.underlying.update(&res);
+                    Poll::Ready(Ok(mut response)) => {
+                        self.underlying.update(&mut response);
 
-                        self.limit
-                            .update(res.rate_limit_status.remaining, res.rate_limit_status.reset);
+                        self.limit.update(
+                            response.rate_limit_status.remaining,
+                            response.rate_limit_status.reset,
+                        );
 
-                        let mut items = L::extract(res.response).into_iter();
+                        let mut items = L::extract(response.response).into_iter();
                         let first = items.next();
 
                         self.state = Some(StreamState::Iterating(Box::new(items)));

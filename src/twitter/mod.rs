@@ -8,12 +8,12 @@ pub use error::Error;
 pub use method::Method;
 
 use egg_mode::cursor::{CursorIter, IDCursor};
-use egg_mode::tweet::{Timeline, Tweet};
+use egg_mode::tweet::Tweet;
 use egg_mode::user::{TwitterUser, UserID};
 use egg_mode::{KeyPair, Response, Token};
 use futures::future::try_join_all;
 use futures::{Future, FutureExt, Stream, TryStreamExt};
-use rate_limited::{RateLimitedClient, RateLimitedStream};
+use rate_limited::{RateLimitedClient, RateLimitedStream, TimelineScrollback};
 use regex::Regex;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
@@ -126,38 +126,19 @@ impl Client {
             .await
     }
 
-    async fn timeline_to_vec(&self, timeline: Timeline) -> EggModeResult<Vec<u64>> {
-        let mut res = Vec::with_capacity(3200);
-        let (mut timeline, mut tweets) = timeline.start().await?;
-
-        while !tweets.response.is_empty() {
-            res.extend(
-                tweets
-                    .response
-                    .iter()
-                    .map(|tweet| tweet.id)
-                    .collect::<Vec<_>>(),
-            );
-            let (new_timeline, new_tweets) = timeline.older(None).await?;
-            timeline = new_timeline;
-            tweets = new_tweets;
-        }
-
-        Ok(res)
-    }
-
-    pub async fn tweets<T: Into<UserID>>(
+    pub fn tweets<T: Into<UserID>>(
         &self,
         acct: T,
         with_replies: bool,
         with_rts: bool,
-    ) -> EggModeResult<Vec<u64>> {
-        self.timeline_to_vec(
+    ) -> RateLimitedStream<'static, TimelineScrollback> {
+        self.app_limited_client.timeline_scrollback_stream(
+            Method::USER_TIMELINE,
             egg_mode::tweet::user_timeline(acct, with_replies, with_rts, &self.app_token)
                 .with_page_size(200),
         )
-        .await
     }
+
     pub fn follower_ids<T: Into<UserID>>(
         &self,
         acct: T,

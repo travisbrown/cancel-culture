@@ -80,7 +80,11 @@ async fn main() -> Result<()> {
             Ok(())
         }
         SubCommand::ListTweets(ListTweets { screen_name }) => {
-            let ids = client.tweets(screen_name, true, true).await?;
+            let ids = client
+                .tweets(screen_name, true, true)
+                .map_ok(|status| status.id)
+                .try_collect::<Vec<_>>()
+                .await?;
 
             for id in ids {
                 println!("{}", id);

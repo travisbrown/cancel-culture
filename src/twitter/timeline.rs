@@ -1,6 +1,6 @@
-use egg_mode::Response;
 use egg_mode::error::Result;
 use egg_mode::tweet::{Timeline, Tweet};
+use egg_mode::Response;
 use futures::{FutureExt, Stream, StreamExt, TryStreamExt};
 use std::future::Future;
 use std::pin::Pin;
