@@ -10,6 +10,22 @@ use std::io::Read;
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
+
+    let log_level = match opts.verbose {
+        0 => simplelog::LevelFilter::Off,
+        1 => simplelog::LevelFilter::Error,
+        2 => simplelog::LevelFilter::Warn,
+        3 => simplelog::LevelFilter::Info,
+        4 => simplelog::LevelFilter::Debug,
+        _ => simplelog::LevelFilter::Trace,
+    };
+
+    let _ = simplelog::TermLogger::init(
+        log_level,
+        simplelog::Config::default(),
+        simplelog::TerminalMode::Stderr,
+    );
+
     let client = Client::from_config_file(&opts.key_file).await?;
 
     match opts.command {
@@ -207,6 +223,9 @@ struct Opts {
     /// TOML file containing Twitter API keys
     #[clap(short, long, default_value = "keys.toml")]
     key_file: String,
+    /// Level of verbosity
+    #[clap(short, long, parse(from_occurrences))]
+    verbose: i32,
     #[clap(subcommand)]
     command: SubCommand,
 }
