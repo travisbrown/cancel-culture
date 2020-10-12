@@ -4,6 +4,7 @@ use cancelculture::wayback;
 use clap::{crate_authors, crate_version, Clap};
 use egg_mode::user::TwitterUser;
 use futures::TryStreamExt;
+use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
@@ -152,20 +153,25 @@ async fn main() -> Result<()> {
             limit,
             ref screen_name,
         }) => {
-            let results = wayback::search(format!("twitter.com/{}/status/*", screen_name)).await?;
+            let wayback_client = wayback::Client::new();
+            let url = format!("twitter.com/{}/status/*", screen_name);
+            let mut items = wayback_client.search(&url).await?;
+
+            items.sort_unstable_by_key(|item| item.url.clone());
+
+            let results = items.into_iter().group_by(|item| item.url.clone());
 
             let mut candidates = results
-                .0
                 .into_iter()
                 .flat_map(|(k, vs)| {
                     twitter::extract_status_id(&k).and_then(|id| {
                         // We currently exclude redirects here, which represent retweets.
                         let valid = vs
                             .into_iter()
-                            .filter(|item| item.status == 200)
+                            .filter(|item| item.status.is_none() || item.status == Some(200))
                             .collect::<Vec<_>>();
-                        let last = valid.iter().map(|item| item.datetime).max();
-                        let first = valid.into_iter().min_by_key(|item| item.datetime);
+                        let last = valid.iter().map(|item| item.archived).max();
+                        let first = valid.into_iter().min_by_key(|item| item.archived);
 
                         first.zip(last).map(|(f, l)| (id, l, f))
                     })
@@ -182,7 +188,7 @@ async fn main() -> Result<()> {
             for (id, _, current) in selected {
                 match by_id.get(&id) {
                     Some(latest) => {
-                        if latest.datetime < current.datetime {
+                        if latest.archived < current.archived {
                             by_id.insert(id, current);
                         }
                     }
@@ -205,7 +211,8 @@ async fn main() -> Result<()> {
                 if let Some(item) = by_id.get(&id) {
                     println!(
                         "https://web.archive.org/web/{}/{}",
-                        item.timestamp, item.url
+                        item.timestamp(),
+                        item.url
                     );
                 }
             }

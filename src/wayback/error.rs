@@ -1,0 +1,42 @@
+use std::fmt::{Debug, Display, Formatter};
+
+#[derive(Debug)]
+pub enum Error {
+    ClientError(reqwest::Error),
+    ItemParsingError(String),
+    FileIOError(std::io::Error),
+    StoreContentsDecodingError(csv::Error),
+    StoreContentsEncodingError(Box<csv::IntoInnerError<csv::Writer<Vec<u8>>>>),
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Self {
+        Error::ClientError(e)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::FileIOError(e)
+    }
+}
+
+impl From<csv::Error> for Error {
+    fn from(e: csv::Error) -> Self {
+        Error::StoreContentsDecodingError(e)
+    }
+}
+
+impl From<csv::IntoInnerError<csv::Writer<Vec<u8>>>> for Error {
+    fn from(e: csv::IntoInnerError<csv::Writer<Vec<u8>>>) -> Self {
+        Error::StoreContentsEncodingError(Box::new(e))
+    }
+}

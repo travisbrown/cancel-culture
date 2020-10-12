@@ -7,6 +7,7 @@ pub enum Error {
     ApiError(egg_mode::error::Error),
     BrowserError(fantoccini::error::CmdError),
     HttpClientError(reqwest::Error),
+    WaybackClientError(crate::wayback::Error),
     TweetIDParseError(String),
     NotReplyError(u64),
     MissingUserError(u64),
@@ -48,5 +49,11 @@ impl From<fantoccini::error::CmdError> for Error {
 impl From<reqwest::Error> for Error {
     fn from(e: reqwest::Error) -> Self {
         Error::HttpClientError(e)
+    }
+}
+
+impl From<crate::wayback::Error> for Error {
+    fn from(e: crate::wayback::Error) -> Self {
+        Error::WaybackClientError(e)
     }
 }

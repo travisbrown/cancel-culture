@@ -49,7 +49,7 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
 
             println!(
                 "{} {} {} {}",
-                link.url, link.mime_type, date_from_str, date_to_str
+                link.url, link.mimetype, date_from_str, date_to_str
             );
         }
 
@@ -101,13 +101,13 @@ async fn extract_links(
 
     for row in &mut rows {
         let url = row.find(URL_LOC).await?.text().await?;
-        let mime_type = row.find(MIME_TYPE_LOC).await?.text().await?;
+        let mimetype = row.find(MIME_TYPE_LOC).await?.text().await?;
         let date_from = parse_wayback_date(&row.find(DATE_FROM_LOC).await?.text().await?);
         let date_to = parse_wayback_date(&row.find(DATE_TO_LOC).await?.text().await?);
 
         res.push(WaybackLink {
             url,
-            mime_type,
+            mimetype,
             date_from,
             date_to,
         });
@@ -151,7 +151,7 @@ struct Opts {
 #[derive(Debug)]
 pub struct WaybackLink {
     pub url: String,
-    pub mime_type: String,
+    pub mimetype: String,
     pub date_from: Option<NaiveDate>,
     pub date_to: Option<NaiveDate>,
 }
