@@ -1,3 +1,5 @@
+pub mod parser;
+
 use fantoccini::error::CmdError;
 use fantoccini::{Client, Locator};
 use image::{DynamicImage, GenericImageView, Rgba};
