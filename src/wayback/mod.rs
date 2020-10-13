@@ -12,7 +12,7 @@ use reqwest::Client as RClient;
 
 type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Item {
     pub url: String,
     pub archived: NaiveDateTime,

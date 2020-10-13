@@ -7,14 +7,14 @@ use flate2::read::GzDecoder;
 use flate2::{Compression, GzBuilder};
 use futures_locks::RwLock;
 use sha1::{Digest, Sha1};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 struct Contents {
-    map: HashMap<String, Vec<Item>>,
-    hashes: HashSet<String>,
+    by_url: HashMap<String, Vec<Item>>,
+    by_digest: HashMap<String, Vec<Item>>,
     file: File,
 }
 
@@ -30,17 +30,27 @@ impl Store {
     pub async fn contains(&self, item: &Item) -> bool {
         let contents = self.contents.read().await;
 
-        if let Some(items) = contents.map.get(&item.url) {
+        if let Some(items) = contents.by_url.get(&item.url) {
             items.contains(item)
         } else {
             false
         }
     }
 
+    pub async fn items_by_digest(&self, digest: &str) -> Vec<Item> {
+        self.contents
+            .read()
+            .await
+            .by_digest
+            .get(digest)
+            .map(|res| res.to_vec())
+            .unwrap_or_default()
+    }
+
     pub async fn add(&self, item: &Item, data: Bytes) -> Result<()> {
         let mut contents = self.contents.write().await;
 
-        if !contents.hashes.contains(&item.digest) {
+        if !contents.by_digest.contains_key(&item.digest) {
             let file = File::create(self.data_path(&item.digest))?;
             let mut gz = GzBuilder::new()
                 .filename(item.infer_filename())
@@ -49,7 +59,7 @@ impl Store {
             gz.finish()?;
         }
 
-        if let Some(items) = contents.map.get(&item.url) {
+        if let Some(items) = contents.by_url.get(&item.url) {
             if items.contains(item) {
                 return Ok(());
             }
@@ -67,8 +77,8 @@ impl Store {
         contents.file.write_all(&csv.into_inner()?)?;
         contents.file.flush()?;
 
-        Store::add_item(&mut contents.map, item.clone());
-        contents.hashes.insert(item.digest.clone());
+        Store::add_item_by_url(&mut contents.by_url, item.clone());
+        Store::add_item_by_digest(&mut contents.by_digest, item.clone());
 
         Ok(())
     }
@@ -107,6 +117,12 @@ impl Store {
         }
     }
 
+    pub fn extract_digest<P: AsRef<Path>>(path: P) -> Option<String> {
+        path.as_ref()
+            .file_stem()
+            .and_then(|s| s.to_str().map(|s| s.to_owned()))
+    }
+
     pub fn load<P: AsRef<Path>>(base_dir: P) -> Result<Store> {
         let contents_path = Store::contents_path(&base_dir);
 
@@ -128,12 +144,12 @@ impl Store {
             vec![]
         };
 
-        let mut map: HashMap<String, Vec<Item>> = HashMap::new();
-        let mut hashes = HashSet::new();
+        let mut by_url: HashMap<String, Vec<Item>> = HashMap::new();
+        let mut by_digest: HashMap<String, Vec<Item>> = HashMap::new();
 
         for item in items {
-            hashes.insert(item.digest.clone());
-            Store::add_item(&mut map, item);
+            Store::add_item_by_url(&mut by_url, item.clone());
+            Store::add_item_by_digest(&mut by_digest, item);
         }
 
         let file = OpenOptions::new()
@@ -143,17 +159,32 @@ impl Store {
 
         Ok(Store {
             base_dir: base_dir.as_ref().to_path_buf(),
-            contents: RwLock::new(Contents { map, hashes, file }),
+            contents: RwLock::new(Contents {
+                by_url,
+                by_digest,
+                file,
+            }),
         })
     }
 
-    fn add_item(map: &mut HashMap<String, Vec<Item>>, item: Item) {
+    fn add_item_by_url(map: &mut HashMap<String, Vec<Item>>, item: Item) {
         match map.get_mut(&item.url) {
             Some(url_items) => {
                 url_items.push(item);
             }
             None => {
                 map.insert(item.url.clone(), vec![item]);
+            }
+        }
+    }
+
+    fn add_item_by_digest(map: &mut HashMap<String, Vec<Item>>, item: Item) {
+        match map.get_mut(&item.digest) {
+            Some(digest_items) => {
+                digest_items.push(item);
+            }
+            None => {
+                map.insert(item.digest.clone(), vec![item]);
             }
         }
     }
