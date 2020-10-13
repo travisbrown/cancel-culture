@@ -4,7 +4,8 @@ use std::path::Path;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
 
-fn main() -> Void {
+#[tokio::main]
+async fn main() -> Void {
     let _ = simplelog::TermLogger::init(
         simplelog::LevelFilter::Info,
         simplelog::Config::default(),
@@ -13,6 +14,7 @@ fn main() -> Void {
 
     let args: Vec<String> = std::env::args().collect();
     let path = Path::new(&args[1]);
+    let store = Store::load("wayback")?;
 
     if path.is_file() {
         let mut file = File::open(path)?;
@@ -22,6 +24,7 @@ fn main() -> Void {
         let contents = std::fs::read_dir(path)?;
         let mut count = 0;
         let mut failed = 0;
+        let mut failed302 = 0;
 
         for result in contents {
             let path = result?.path();
@@ -37,13 +40,29 @@ fn main() -> Void {
                     count += 1;
                 } else {
                     log::error!("Bad file: {} (expected {})", stem, hash);
+                    let items = store.items_by_digest(stem).await;
+
+                    if items.iter().filter(|item| item.status == Some(302)).count() > 0 {
+                        failed302 += 1;
+                    }
+
+                    for item in items {
+                        if item.status != Some(302) {
+                            log::error!("    {:?}", item);
+                        }
+                    }
+
                     failed += 1;
                 }
             }
         }
 
         if failed > 0 {
-            log::error!("Failed to validate {} files", failed);
+            log::error!(
+                "Failed to validate {} files ({} redirects)",
+                failed,
+                failed302
+            );
         }
 
         log::info!("Validated {} files", count);

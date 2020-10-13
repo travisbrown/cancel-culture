@@ -1,8 +1,10 @@
 use chrono::{DateTime, TimeZone, Utc};
+use flate2::read::GzDecoder;
 use lazy_static::lazy_static;
 use scraper::element_ref::ElementRef;
 use scraper::selector::Selector;
 use scraper::Html;
+use std::io::Read;
 
 #[derive(Debug)]
 pub struct BrowserTweet {
@@ -21,6 +23,15 @@ lazy_static! {
         Selector::parse("meta[property='og:description']").unwrap();
 }
 
+pub fn parse_gz<R: Read>(input: &mut R) -> Result<Html, std::io::Error> {
+    let mut gz = GzDecoder::new(input);
+    let mut html = String::new();
+
+    gz.read_to_string(&mut html)?;
+
+    Ok(Html::parse_document(&html))
+}
+
 pub fn extract_description(doc: &Html) -> Option<String> {
     let res = doc
         .select(&DESCRIPTION_SEL)
@@ -35,7 +46,7 @@ pub fn extract_tweets(doc: &Html) -> Vec<BrowserTweet> {
         .collect()
 }
 
-pub fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
+fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
     let element = element_ref.value();
 
     let id = element

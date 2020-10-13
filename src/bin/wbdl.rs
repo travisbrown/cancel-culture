@@ -14,7 +14,12 @@ async fn main() -> Void {
 
     let client = Client::new();
     let store = Store::load("wayback")?;
-    let items = client.search(&args[1]).await?;
+    let items = client
+        .search(&args[1])
+        .await?
+        .into_iter()
+        .filter(|item| item.url.len() < 80)
+        .collect::<Vec<_>>();
     log::info!("{} items to download", items.len());
 
     client.save_all(&store, &items, 4).await?;
