@@ -83,10 +83,7 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use flate2::read::GzDecoder;
-    use scraper::node::Element;
-    use scraper::selector::Selector;
     use scraper::Html;
     use std::fs::File;
     use std::io::Read;
