@@ -1,11 +1,77 @@
 pub mod parser;
 
+use chrono::NaiveDate;
 use fantoccini::error::CmdError;
 use fantoccini::{Client, Locator};
+use futures::{Stream, TryStreamExt};
 use image::{DynamicImage, GenericImageView, Rgba};
 use std::time::Duration;
 
 const HEADING_LOC: Locator = Locator::XPath("//main//h1[@role='heading']");
+const TWEET_LINK_LOC: Locator = Locator::XPath("//a[contains(@href, '/status/')]");
+const SCROLL_LOAD_WAIT_MS: u64 = 500;
+const SCROLL_MAX_ATTEMPTS: usize = 5;
+pub const SEARCH_DATE_FMT: &str = "%Y-%m-%d";
+
+async fn extract_urls<'a>(
+    client: &'a mut Client,
+    locator: Locator<'a>,
+    wait: Duration,
+) -> Result<Vec<String>, CmdError> {
+    let elements = client.find_all(locator).await?;
+    let mut urls = Vec::with_capacity(elements.len());
+
+    for mut element in elements {
+        if let Some(url) = element.attr("href").await? {
+            urls.push(url);
+        }
+    }
+
+    if let Ok(mut element) = client.active_element().await {
+        element.send_keys(" ").await?;
+        tokio::time::delay_for(wait).await;
+    }
+
+    Ok(urls)
+}
+
+fn make_search_url(screen_name: &str, from: &NaiveDate, to: &NaiveDate) -> String {
+    format!(
+        "https://twitter.com/search?q=(from%3A{})%20until%3A{}%20since%3A{}&src=typed_query",
+        screen_name,
+        to.format(SEARCH_DATE_FMT),
+        from.format(SEARCH_DATE_FMT)
+    )
+}
+
+// This shouldn't really be async.
+pub async fn search_by_date<'a>(
+    client: &'a mut Client,
+    screen_name: &'a str,
+    from: &'a NaiveDate,
+    to: &'a NaiveDate,
+) -> Result<impl Stream<Item = Result<String, CmdError>> + 'a, CmdError> {
+    let url = make_search_url(&screen_name, &from, &to);
+
+    let pattern = format!("{}/status/\\d+$", screen_name);
+    let valid_status_url = regex::Regex::new(&pattern).unwrap();
+    let wait = Duration::from_millis(SCROLL_LOAD_WAIT_MS);
+
+    client.goto(&url).await?;
+
+    Ok(super::scroll(
+        client,
+        move |c| {
+            let mut client = c.clone();
+            async move { extract_urls(&mut client, TWEET_LINK_LOC, wait).await }
+        },
+        SCROLL_MAX_ATTEMPTS,
+    )
+    .try_filter(move |url| {
+        let valid = valid_status_url.is_match(url);
+        async move { valid }
+    }))
+}
 
 pub async fn status_exists(client: &mut Client, id: u64) -> Result<bool, CmdError> {
     let url = format!("https://twitter.com/tweet/status/{}", id);
