@@ -1,7 +1,7 @@
-mod scroll;
+mod scroller;
 pub mod twitter;
 
-pub use scroll::scroll;
+pub use scroller::Scroller;
 
 use fantoccini::error::NewSessionError;
 use fantoccini::Client;

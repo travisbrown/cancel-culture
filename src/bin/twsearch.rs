@@ -1,7 +1,7 @@
 use cancelculture::browser;
-use chrono::NaiveDate;
+use cancelculture::browser::twitter::search::UserTweetSearch;
+use cancelculture::browser::Scroller;
 use clap::{crate_authors, crate_version, Clap};
-use futures::TryStreamExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,13 +21,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await;
 
-    let from = NaiveDate::parse_from_str(&opts.from, browser::twitter::SEARCH_DATE_FMT)?;
-    let to = NaiveDate::parse_from_str(&opts.to, browser::twitter::SEARCH_DATE_FMT)?;
-
-    let stream =
-        browser::twitter::search_by_date(&mut client, &opts.screen_name, &from, &to).await?;
-
-    let urls = stream.try_collect::<Vec<_>>().await?;
+    let search = UserTweetSearch::parse(&opts.screen_name, &opts.from, &opts.to)?;
+    let urls = search.extract_all(&mut client).await?;
 
     log::info!("Found {}", urls.len());
 
