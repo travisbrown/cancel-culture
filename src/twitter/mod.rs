@@ -1,3 +1,4 @@
+pub mod config;
 mod error;
 mod method;
 mod rate_limited;
@@ -15,37 +16,14 @@ use futures::future::try_join_all;
 use futures::{Future, FutureExt, Stream, TryStreamExt};
 use rate_limited::{RateLimitedClient, RateLimitedStream, TimelineScrollback};
 use regex::Regex;
-use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::default::Default;
 use std::fs;
 use std::mem::drop;
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-
-#[derive(Deserialize)]
-struct Config {
-    twitter: TwitterConfig,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct TwitterConfig {
-    consumer_key: String,
-    consumer_secret: String,
-    access_token: String,
-    access_token_secret: String,
-}
-
-impl TwitterConfig {
-    pub fn key_pairs(self) -> (KeyPair, KeyPair) {
-        (
-            KeyPair::new(self.consumer_key, self.consumer_secret),
-            KeyPair::new(self.access_token, self.access_token_secret),
-        )
-    }
-}
 
 pub type Result<T> = std::result::Result<T, Error>;
 pub type EggModeResult<T> = std::result::Result<T, egg_mode::error::Error>;
@@ -103,10 +81,10 @@ impl Client {
         Client::new(token, app_token, user).await
     }
 
-    pub async fn from_config_file(path: &str) -> Result<Client> {
+    pub async fn from_config_file<P: AsRef<Path>>(path: P) -> Result<Client> {
         let contents = fs::read_to_string(path)?;
-        let config = toml::from_str::<Config>(&contents)?;
-        let (consumer, access) = config.twitter.key_pairs();
+        let config = toml::from_str::<config::Config>(&contents)?;
+        let (consumer, access) = config.twitter_key_pairs();
 
         Ok(Self::from_key_pairs(consumer, access).await?)
     }
