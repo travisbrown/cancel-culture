@@ -3,7 +3,7 @@ use futures::{future::BoxFuture, TryFutureExt};
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::time::Duration;
-use tokio::time::sleep;
+use tokio::time::delay_for;
 
 /// Represents a page of stuff that can be scrolled through and extracted
 pub trait Scroller {
@@ -42,7 +42,7 @@ pub trait Scroller {
         Box::pin(async move {
             self.init(client).await?;
             if let Some(duration) = Self::wait() {
-                sleep(duration).await;
+                delay_for(duration).await;
             }
 
             let mut result = self.extract(client).await?;
@@ -54,7 +54,7 @@ pub trait Scroller {
             while remaining > 0 {
                 Self::advance(client).await?;
                 if let Some(duration) = Self::wait() {
-                    sleep(duration).await;
+                    delay_for(duration).await;
                 }
 
                 let batch = self.extract(client).await?;
