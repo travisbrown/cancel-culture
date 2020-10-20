@@ -1,4 +1,3 @@
-mod future;
 mod method_limit;
 mod stream;
 
