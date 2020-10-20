@@ -6,7 +6,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 type TimelineResult = Result<(Timeline, Response<Vec<Tweet>>)>;
 
@@ -45,7 +45,7 @@ impl Stream for TimelineStream {
                 } else {
                     timeline.max_id = self.max_id;
                 }
-                self.underlying = Box::pin(delay_for(self.wait).then(|_| timeline.newer(None)));
+                self.underlying = Box::pin(sleep(self.wait).then(|_| timeline.newer(None)));
                 response.response
             })
             .map(Some)

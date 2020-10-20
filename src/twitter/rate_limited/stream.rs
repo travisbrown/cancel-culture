@@ -13,7 +13,7 @@ use std::iter::Peekable;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use tokio::time::{delay_for, Delay};
+use tokio::time::{sleep, Sleep};
 
 pub trait Loader<'a> {
     type Item: 'static;
@@ -112,7 +112,7 @@ impl Loader<'static> for TimelineScrollback {
 }
 
 enum StreamState<'a, L: Loader<'a>> {
-    Waiting(Delay),
+    Waiting(Sleep),
     Loading(ResponseFuture<'a, L::Page>),
     Iterating(Box<dyn Iterator<Item = L::Item>>),
 }
@@ -192,7 +192,7 @@ impl<'a, L: Loader<'a> + Unpin> Stream for RateLimitedStream<'a, L> {
                     delay,
                     Utc.timestamp(self.limit.reset().into(), 0)
                 );
-                StreamState::Waiting(delay_for(delay))
+                StreamState::Waiting(sleep(delay))
             } else {
                 self.limit.decrement();
                 StreamState::Loading(self.underlying.load())

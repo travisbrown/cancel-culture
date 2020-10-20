@@ -60,7 +60,7 @@ pub async fn shoot_tweet_bytes(
     client.wait_for_find(locator).await?;
 
     if let Some(duration) = wait_for_load {
-        tokio::time::delay_for(duration).await;
+        tokio::time::sleep(duration).await;
     }
 
     client.screenshot().await

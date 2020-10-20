@@ -1,7 +1,7 @@
 use futures::TryStreamExt;
 use reqwest::{Client, StatusCode};
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
 
@@ -48,7 +48,7 @@ async fn main() -> Void {
             || body.contains("reached the limit of active sessions")
         {
             println!("Headers: {:?}", headers);
-            delay_for(Duration::from_secs(300)).await;
+            sleep(Duration::from_secs(300)).await;
         }
     }
 
