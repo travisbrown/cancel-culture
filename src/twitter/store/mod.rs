@@ -55,14 +55,6 @@ const USER_OBSERVATION_INSERT: &str = "
     ) VALUES (?, ?, ?, ?, ?)
 ";
 
-const TWEET_INSERT: &str = "INSERT INTO tweet (id, user_id) VALUES (?, ?)";
-const TWEET_DATA_INSERT: &str = "
-  INSERT INTO tweet_data (tweet_id, created, content, reply_to, retweet_of, quoting)
-      VALUES (?, ?, ?, ?, ?, ?)
-";
-const TWEET_OBSERVATION_INSERT: &str =
-    "INSERT INTO tweet_observation (tweet_id, retweet_count, favorite_count) VALUES (?, ?, ?)";
-
 pub struct Store {
     connection: Connection,
 }

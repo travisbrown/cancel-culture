@@ -1,7 +1,7 @@
 use super::super::Scroller;
 use chrono::{format::ParseError, NaiveDate};
 use fantoccini::{error::CmdError, Client, Locator};
-use futures::future::BoxFuture;
+use futures::{future::BoxFuture, FutureExt};
 use regex::Regex;
 
 pub struct UserTweetSearch(String, NaiveDate, NaiveDate, String, Regex);
@@ -39,14 +39,14 @@ impl Scroller for UserTweetSearch {
     type Err = CmdError;
 
     fn init<'a>(&'a self, client: &'a mut Client) -> BoxFuture<'a, Result<(), Self::Err>> {
-        Box::pin(client.goto(&self.3))
+        client.goto(&self.3).boxed()
     }
 
     fn extract<'a>(
         &'a self,
         client: &'a mut Client,
     ) -> BoxFuture<'a, Result<Vec<Self::Item>, Self::Err>> {
-        Box::pin(async move {
+        async move {
             let elements = client.find_all(Self::TWEET_LINK_LOC).await?;
 
             let mut urls = Vec::with_capacity(elements.len());
@@ -60,6 +60,7 @@ impl Scroller for UserTweetSearch {
             }
 
             Ok(urls)
-        })
+        }
+        .boxed()
     }
 }

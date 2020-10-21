@@ -1,6 +1,7 @@
-use cancelculture::twitter;
-use cancelculture::twitter::{Client, Error, Result};
-use cancelculture::wayback;
+use cancelculture::{
+    twitter::{extract_status_id, Client, Error, Result},
+    wayback,
+};
 use clap::{crate_authors, crate_version, Clap};
 use egg_mode::user::TwitterUser;
 use futures::TryStreamExt;
@@ -164,7 +165,7 @@ async fn main() -> Result<()> {
             let mut candidates = results
                 .into_iter()
                 .flat_map(|(k, vs)| {
-                    twitter::extract_status_id(&k).and_then(|id| {
+                    extract_status_id(&k).and_then(|id| {
                         // We currently exclude redirects here, which represent retweets.
                         let valid = vs
                             .into_iter()

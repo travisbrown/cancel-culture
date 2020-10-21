@@ -1,5 +1,4 @@
-use cancelculture::browser;
-use cancelculture::twitter;
+use cancelculture::{browser, twitter};
 use clap::{crate_authors, crate_version, Clap};
 use image::DynamicImage;
 use std::path::PathBuf;

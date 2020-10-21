@@ -1,6 +1,4 @@
-use cancelculture::browser;
-use cancelculture::browser::twitter::search::UserTweetSearch;
-use cancelculture::browser::Scroller;
+use cancelculture::browser::{make_client_or_panic, twitter::search::UserTweetSearch, Scroller};
 use clap::{crate_authors, crate_version, Clap};
 
 #[tokio::main]
@@ -13,7 +11,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let opts: Opts = Opts::parse();
 
-    let mut client = browser::make_client_or_panic(
+    let mut client = make_client_or_panic(
         &opts.browser,
         !opts.disable_headless,
         opts.host.as_deref(),

@@ -7,40 +7,30 @@ pub mod timeline;
 
 pub use error::Error;
 pub use method::Method;
+use rate_limited::{RateLimitedClient, TimelineScrollback};
 
-use egg_mode::cursor::{CursorIter, IDCursor};
 use egg_mode::tweet::Tweet;
 use egg_mode::user::{TwitterUser, UserID};
 use egg_mode::{KeyPair, Response, Token};
-use futures::future::try_join_all;
-use futures::{Future, FutureExt, Stream, TryStreamExt};
-use rate_limited::{RateLimitedClient, RateLimitedStream, TimelineScrollback};
+use futures::{
+    future::{try_join_all, LocalBoxFuture},
+    stream::LocalBoxStream,
+    FutureExt, TryStreamExt,
+};
 use regex::Regex;
 use std::collections::HashMap;
-use std::default::Default;
 use std::fs;
-use std::mem::drop;
 use std::path::Path;
-use std::pin::Pin;
-use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 pub type Result<T> = std::result::Result<T, Error>;
 pub type EggModeResult<T> = std::result::Result<T, egg_mode::error::Error>;
-type ResponseFuture<'a, T> = Pin<Box<dyn Future<Output = EggModeResult<Response<T>>> + 'a>>;
-
-#[derive(Default)]
-struct UserCache {
-    by_id: HashMap<u64, TwitterUser>,
-    id_by_screen_name: HashMap<String, u64>,
-    screen_name_by_id: HashMap<u64, String>,
-}
+type ResponseFuture<'a, T> = LocalBoxFuture<'a, EggModeResult<Response<T>>>;
 
 pub struct Client {
     token: Token,
     app_token: Token,
     user: TwitterUser,
-    user_cache: Arc<RwLock<UserCache>>,
     app_limited_client: RateLimitedClient,
 }
 
@@ -50,23 +40,12 @@ impl Client {
         app_token: Token,
         user: TwitterUser,
     ) -> egg_mode::error::Result<Client> {
-        let mut user_cache = UserCache::default();
-
-        user_cache
-            .id_by_screen_name
-            .insert(user.screen_name.clone(), user.id);
-        user_cache
-            .screen_name_by_id
-            .insert(user.id, user.screen_name.clone());
-        user_cache.by_id.insert(user.id, user.clone());
-
         let app_limited_client = RateLimitedClient::new(app_token.clone()).await?;
 
         Ok(Client {
             token,
             app_token,
             user,
-            user_cache: Arc::new(RwLock::new(user_cache)),
             app_limited_client,
         })
     }
@@ -109,46 +88,42 @@ impl Client {
         acct: T,
         with_replies: bool,
         with_rts: bool,
-    ) -> RateLimitedStream<'static, TimelineScrollback> {
-        self.app_limited_client.timeline_scrollback_stream(
+    ) -> LocalBoxStream<EggModeResult<Tweet>> {
+        self.app_limited_client.to_stream(
+            TimelineScrollback::new(
+                egg_mode::tweet::user_timeline(acct, with_replies, with_rts, &self.app_token)
+                    .with_page_size(200),
+            ),
             Method::USER_TIMELINE,
-            egg_mode::tweet::user_timeline(acct, with_replies, with_rts, &self.app_token)
-                .with_page_size(200),
         )
     }
 
-    pub fn follower_ids<T: Into<UserID>>(
-        &self,
-        acct: T,
-    ) -> RateLimitedStream<'static, CursorIter<IDCursor>> {
+    pub fn follower_ids<T: Into<UserID>>(&self, acct: T) -> LocalBoxStream<EggModeResult<u64>> {
         let cursor = egg_mode::user::followers_ids(acct, &self.app_token).with_page_size(5000);
 
         self.app_limited_client
-            .cursor_stream(Method::USER_FOLLOWER_IDS, cursor)
+            .to_stream(cursor, Method::USER_FOLLOWER_IDS)
     }
 
-    pub fn followed_ids<T: Into<UserID>>(
-        &self,
-        acct: T,
-    ) -> RateLimitedStream<'static, CursorIter<IDCursor>> {
+    pub fn followed_ids<T: Into<UserID>>(&self, acct: T) -> LocalBoxStream<EggModeResult<u64>> {
         let cursor = egg_mode::user::friends_ids(acct, &self.app_token).with_page_size(5000);
 
         self.app_limited_client
-            .cursor_stream(Method::USER_FOLLOWED_IDS, cursor)
+            .to_stream(cursor, Method::USER_FOLLOWED_IDS)
     }
 
-    pub fn follower_ids_self(&self) -> RateLimitedStream<'static, CursorIter<IDCursor>> {
+    pub fn follower_ids_self(&self) -> LocalBoxStream<EggModeResult<u64>> {
         self.follower_ids(self.user.id)
     }
 
-    pub fn followed_ids_self(&self) -> RateLimitedStream<'static, CursorIter<IDCursor>> {
+    pub fn followed_ids_self(&self) -> LocalBoxStream<EggModeResult<u64>> {
         self.followed_ids(self.user.id)
     }
 
     pub fn lookup_users<'a, T, I: IntoIterator<Item = T>>(
         &'a self,
         ids: I,
-    ) -> impl Stream<Item = EggModeResult<TwitterUser>> + 'a
+    ) -> LocalBoxStream<'a, EggModeResult<TwitterUser>>
     where
         T: Into<UserID> + Unpin + Send,
     {
@@ -161,8 +136,10 @@ impl Client {
             futs.push(egg_mode::user::lookup(chunk.to_vec(), &self.app_token).boxed_local());
         }
 
+        let iter = futs.into_iter();
+
         self.app_limited_client
-            .futures_stream(Method::USER_LOOKUP, futs.into_iter())
+            .to_stream(iter.peekable(), Method::USER_LOOKUP)
     }
 
     pub async fn get_in_reply_to(&self, id: u64) -> EggModeResult<Option<(String, u64)>> {
@@ -201,56 +178,14 @@ impl Client {
         Ok(status_map.iter().map(|(k, v)| (*k, v.is_some())).collect())
     }
 
-    pub async fn lookup_users_cached(&self, ids: &[u64]) -> Result<Vec<TwitterUser>> {
-        let cache = self.user_cache.read().unwrap();
-
-        let unknown_ids = ids
-            .iter()
-            .cloned()
-            .filter(|id| !cache.by_id.contains_key(id))
-            .collect::<Vec<u64>>();
-        drop(cache);
-
-        let new_users = try_join_all(
-            unknown_ids
-                .chunks(100)
-                .map(|chunk| egg_mode::user::lookup(chunk.to_vec(), &self.token)),
-        )
-        .await?
-        .into_iter()
-        .map(|r| r.response)
-        .flatten()
-        .collect::<Vec<_>>();
-
-        let mut writeable_cache = self.user_cache.write().unwrap();
-
-        for user in new_users {
-            writeable_cache
-                .id_by_screen_name
-                .insert(user.screen_name.clone(), user.id);
-            writeable_cache.by_id.insert(user.id, user);
-        }
-
-        let mut res = Vec::with_capacity(ids.len());
-
-        for id in ids {
-            // The blocks endpoint may return IDs for users that no longer exist, so we ignore empty values here.
-            if let Some(user) = writeable_cache.by_id.get(id) {
-                res.push(user.clone());
-            }
-        }
-
-        Ok(res)
-    }
-
     pub fn user_timeline_stream<T: Into<UserID>>(
         &self,
         user: T,
         wait: Duration,
-    ) -> Pin<Box<dyn Stream<Item = EggModeResult<Tweet>>>> {
+    ) -> LocalBoxStream<EggModeResult<Tweet>> {
         let timeline = egg_mode::tweet::user_timeline(user, true, true, &self.app_token);
 
-        timeline::TimelineStream::make(timeline, wait)
+        timeline::make_stream(timeline, wait)
     }
 }
 

@@ -1,18 +1,18 @@
 mod method_limit;
 mod stream;
 
-pub use stream::{RateLimitedStream, TimelineScrollback};
+pub use stream::{Pageable, TimelineScrollback};
 
-use super::{Method, ResponseFuture};
-use method_limit::{MethodLimit, MethodLimits};
+use super::Method;
+use method_limit::MethodLimits;
 
-use egg_mode::cursor::{Cursor, CursorIter};
+use chrono::{TimeZone, Utc};
 use egg_mode::error::Result;
 use egg_mode::service::rate_limit_status;
-use egg_mode::tweet::Timeline;
 use egg_mode::Token;
-use serde::de::DeserializeOwned;
-use std::iter::Peekable;
+use futures::{stream::LocalBoxStream, StreamExt, TryStreamExt};
+use log::warn;
+use tokio::time::delay_for;
 
 pub(crate) struct RateLimitedClient {
     limits: MethodLimits,
@@ -26,30 +26,44 @@ impl RateLimitedClient {
         Ok(RateLimitedClient { limits })
     }
 
-    pub(crate) fn cursor_stream<T: Cursor + DeserializeOwned + 'static>(
+    pub(crate) fn to_stream<'a, L: Pageable<'a> + 'a>(
         &self,
+        loader: L,
         method: &Method,
-        underlying: CursorIter<T>,
-    ) -> RateLimitedStream<'static, CursorIter<T>>
-    where
-        T::Item: Unpin + Send,
-    {
-        RateLimitedStream::new(underlying, self.limits.get(method))
-    }
+    ) -> LocalBoxStream<'a, Result<L::Item>> {
+        let limit = self.limits.get(method);
 
-    pub(crate) fn futures_stream<'a, T: 'static, I: Iterator<Item = ResponseFuture<'a, Vec<T>>>>(
-        &self,
-        method: &Method,
-        iterator: I,
-    ) -> RateLimitedStream<'a, Peekable<I>> {
-        RateLimitedStream::new(iterator.peekable(), self.limits.get(method))
-    }
+        futures::stream::try_unfold((loader, false), move |(mut this, is_done)| {
+            let limit = limit.clone();
+            async move {
+                if is_done {
+                    let res: Result<Option<_>> = Ok(None);
+                    res
+                } else {
+                    if let Some(delay) = limit.delay() {
+                        warn!(
+                            "Waiting for {:?} for rate limit reset at {:?}",
+                            delay,
+                            Utc.timestamp(limit.reset().into(), 0)
+                        );
+                        delay_for(delay).await;
+                    }
 
-    pub(crate) fn timeline_scrollback_stream(
-        &self,
-        method: &Method,
-        timeline: Timeline,
-    ) -> RateLimitedStream<'static, TimelineScrollback> {
-        RateLimitedStream::new(TimelineScrollback::new(timeline), self.limits.get(method))
+                    limit.decrement();
+                    let mut response = this.load().await?;
+                    let is_done = this.update(&mut response);
+
+                    limit.update(
+                        response.rate_limit_status.remaining,
+                        response.rate_limit_status.reset,
+                    );
+
+                    Ok(Some((L::extract(response.response), (this, is_done))))
+                }
+            }
+        })
+        .map_ok(|items| futures::stream::iter(items).map(Ok))
+        .try_flatten()
+        .boxed_local()
     }
 }

@@ -1,11 +1,9 @@
-use cancelculture::twitter::store::Store;
-use cancelculture::twitter::Client;
+use cancelculture::twitter::{store::Store, Client};
 use clap::{crate_authors, crate_version, Clap};
 use egg_mode::user::TwitterUser;
-use futures::{Stream, TryStreamExt};
+use futures::{stream::LocalBoxStream, StreamExt, TryStreamExt};
 use log::info;
 use rusqlite::Connection;
-use std::pin::Pin;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
 
@@ -58,17 +56,22 @@ async fn main() -> Void {
 
 async fn add_user_follows(client: &Client, store: &Store, users: &[TwitterUser]) -> Void {
     type PairResult = egg_mode::error::Result<(u64, u64)>;
-    let mut streams: Vec<Pin<Box<dyn Stream<Item = PairResult>>>> =
-        Vec::with_capacity(users.len() * 2);
+    let mut streams: Vec<LocalBoxStream<PairResult>> = Vec::with_capacity(users.len() * 2);
 
     for user in users {
         info!("Adding streams for: {}", user.screen_name);
-        streams.push(Box::pin(
-            client.follower_ids(user.id).map_ok(move |id| (id, user.id)),
-        ));
-        streams.push(Box::pin(
-            client.followed_ids(user.id).map_ok(move |id| (user.id, id)),
-        ));
+        streams.push(
+            client
+                .follower_ids(user.id)
+                .map_ok(move |id| (id, user.id))
+                .boxed_local(),
+        );
+        streams.push(
+            client
+                .followed_ids(user.id)
+                .map_ok(move |id| (user.id, id))
+                .boxed_local(),
+        );
     }
 
     let relations = futures::stream::select_all(streams)

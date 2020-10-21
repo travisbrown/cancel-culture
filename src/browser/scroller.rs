@@ -1,5 +1,5 @@
 use fantoccini::{error::CmdError, Client};
-use futures::{future::BoxFuture, TryFutureExt};
+use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::time::Duration;
@@ -17,10 +17,11 @@ pub trait Scroller {
     ) -> BoxFuture<'a, Result<Vec<Self::Item>, Self::Err>>;
 
     fn advance(client: &mut Client) -> BoxFuture<Result<(), Self::Err>> {
-        Box::pin(async move {
+        async move {
             let mut element = client.active_element().await?;
             element.send_keys(" ").err_into().await
-        })
+        }
+        .boxed()
     }
 
     fn wait() -> Option<Duration> {
@@ -39,7 +40,7 @@ pub trait Scroller {
         Self::Item: Clone + Eq + Hash + Send,
         Self: Sized + Send + Sync,
     {
-        Box::pin(async move {
+        async move {
             self.init(client).await?;
             if let Some(duration) = Self::wait() {
                 delay_for(duration).await;
@@ -76,6 +77,7 @@ pub trait Scroller {
             }
 
             Ok(result)
-        })
+        }
+        .boxed()
     }
 }

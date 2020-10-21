@@ -1,53 +1,38 @@
-use egg_mode::error::Result;
-use egg_mode::tweet::{Timeline, Tweet};
-use egg_mode::Response;
-use futures::{FutureExt, Stream, StreamExt, TryStreamExt};
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use egg_mode::{
+    error::Result,
+    tweet::{Timeline, Tweet},
+};
+use futures::{
+    stream::LocalBoxStream,
+    stream::{iter, try_unfold},
+    StreamExt, TryStreamExt,
+};
 use std::time::Duration;
 use tokio::time::delay_for;
 
-type TimelineResult = Result<(Timeline, Response<Vec<Tweet>>)>;
+pub fn make_stream(timeline: Timeline, wait: Duration) -> LocalBoxStream<'static, Result<Tweet>> {
+    try_unfold(
+        (timeline, None, false),
+        move |(timeline, mut max_id, mut started)| async move {
+            let (mut timeline, response) = if !started {
+                started = true;
+                timeline.start().await?
+            } else {
+                delay_for(wait).await;
+                timeline.newer(None).await?
+            };
 
-pub struct TimelineStream {
-    underlying: Pin<Box<dyn Future<Output = TimelineResult>>>,
-    wait: Duration,
-    max_id: Option<u64>,
-}
+            if !response.is_empty() {
+                max_id = timeline.max_id;
+            } else {
+                timeline.max_id = max_id;
+            }
 
-impl TimelineStream {
-    pub fn new(timeline: Timeline, wait: Duration) -> TimelineStream {
-        TimelineStream {
-            underlying: Box::pin(timeline.start()),
-            wait,
-            max_id: None,
-        }
-    }
-
-    pub fn make(timeline: Timeline, wait: Duration) -> Pin<Box<dyn Stream<Item = Result<Tweet>>>> {
-        let base = TimelineStream::new(timeline, wait);
-
-        base.map_ok(|vs| futures::stream::iter(vs).map(Ok))
-            .try_flatten()
-            .boxed_local()
-    }
-}
-
-impl Stream for TimelineStream {
-    type Item = Result<Vec<Tweet>>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        Future::poll(Pin::new(&mut self.underlying), cx)
-            .map_ok(|(mut timeline, response)| {
-                if !response.is_empty() {
-                    self.max_id = timeline.max_id;
-                } else {
-                    timeline.max_id = self.max_id;
-                }
-                self.underlying = Box::pin(delay_for(self.wait).then(|_| timeline.newer(None)));
-                response.response
-            })
-            .map(Some)
-    }
+            let res: Result<Option<_>> = Ok(Some((response.response, (timeline, max_id, started))));
+            res
+        },
+    )
+    .map_ok(|vs| iter(vs).map(Ok))
+    .try_flatten()
+    .boxed_local()
 }

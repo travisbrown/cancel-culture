@@ -30,7 +30,7 @@ async fn main() -> Void {
         .try_collect::<Vec<_>>()
         .await?;
 
-    for (id, url) in tweets.into_iter().skip(30) {
+    for (_, url) in tweets.into_iter().skip(30) {
         log::info!("Saving: {}", url);
         let data = [("url", url)];
         let response = client

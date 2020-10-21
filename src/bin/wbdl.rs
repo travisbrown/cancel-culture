@@ -13,7 +13,6 @@ async fn main() -> Void {
     let args: Vec<String> = std::env::args().collect();
 
     let client = Client::new();
-    let store = Store::load("wayback")?;
     let items = client
         .search(&args[1])
         .await?
@@ -22,6 +21,7 @@ async fn main() -> Void {
         .collect::<Vec<_>>();
     log::info!("{} items to download", items.len());
 
+    let store = Store::load("wayback")?;
     client.save_all(&store, &items, 4).await?;
 
     Ok(())
