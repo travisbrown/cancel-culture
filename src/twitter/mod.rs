@@ -27,6 +27,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub type EggModeResult<T> = std::result::Result<T, egg_mode::error::Error>;
 type ResponseFuture<'a, T> = LocalBoxFuture<'a, EggModeResult<Response<T>>>;
 
+const TWEET_LOOKUP_PAGE_SIZE: usize = 100;
+const USER_FOLLOWER_IDS_PAGE_SIZE: i32 = 5000;
+const USER_FOLLOWED_IDS_PAGE_SIZE: i32 = 5000;
+const USER_LOOKUP_PAGE_SIZE: usize = 100;
+const USER_TIMELINE_PAGE_SIZE: i32 = 200;
+
 pub struct Client {
     token: Token,
     app_token: Token,
@@ -92,21 +98,23 @@ impl Client {
         self.app_limited_client.to_stream(
             TimelineScrollback::new(
                 egg_mode::tweet::user_timeline(acct, with_replies, with_rts, &self.app_token)
-                    .with_page_size(200),
+                    .with_page_size(USER_TIMELINE_PAGE_SIZE),
             ),
             Method::USER_TIMELINE,
         )
     }
 
     pub fn follower_ids<T: Into<UserID>>(&self, acct: T) -> LocalBoxStream<EggModeResult<u64>> {
-        let cursor = egg_mode::user::followers_ids(acct, &self.app_token).with_page_size(5000);
+        let cursor = egg_mode::user::followers_ids(acct, &self.app_token)
+            .with_page_size(USER_FOLLOWER_IDS_PAGE_SIZE);
 
         self.app_limited_client
             .to_stream(cursor, Method::USER_FOLLOWER_IDS)
     }
 
     pub fn followed_ids<T: Into<UserID>>(&self, acct: T) -> LocalBoxStream<EggModeResult<u64>> {
-        let cursor = egg_mode::user::friends_ids(acct, &self.app_token).with_page_size(5000);
+        let cursor = egg_mode::user::friends_ids(acct, &self.app_token)
+            .with_page_size(USER_FOLLOWED_IDS_PAGE_SIZE);
 
         self.app_limited_client
             .to_stream(cursor, Method::USER_FOLLOWED_IDS)
@@ -130,7 +138,7 @@ impl Client {
         let mut futs = vec![];
 
         let user_ids = ids.into_iter().map(Into::into).collect::<Vec<UserID>>();
-        let chunks = user_ids.chunks(100);
+        let chunks = user_ids.chunks(USER_LOOKUP_PAGE_SIZE);
 
         for chunk in chunks {
             futs.push(egg_mode::user::lookup(chunk.to_vec(), &self.app_token).boxed_local());
@@ -163,7 +171,7 @@ impl Client {
         let chunks = try_join_all(
             ids.into_iter()
                 .collect::<Vec<u64>>()
-                .chunks(100)
+                .chunks(TWEET_LOOKUP_PAGE_SIZE)
                 .map(|chunk| egg_mode::tweet::lookup_map(chunk.to_vec(), &self.app_token)),
         )
         .await?
