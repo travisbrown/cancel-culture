@@ -1,4 +1,4 @@
-use cancelculture::wayback::{Client, Store};
+use cancel_culture::wayback::{Client, Store};
 
 type Void = Result<(), Box<dyn std::error::Error>>;
 

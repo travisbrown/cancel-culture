@@ -1,4 +1,4 @@
-use cancelculture::{
+use cancel_culture::{
     twitter::{extract_status_id, Client, Error, Result},
     wayback,
 };

@@ -1,4 +1,4 @@
-use cancelculture::browser;
+use cancel_culture::browser;
 use fantoccini::Locator;
 use std::collections::HashSet;
 use std::time::Duration;

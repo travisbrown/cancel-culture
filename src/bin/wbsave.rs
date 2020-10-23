@@ -1,3 +1,4 @@
+use cancel_culture::twitter;
 use futures::TryStreamExt;
 use reqwest::{Client, StatusCode};
 use std::time::Duration;
@@ -16,7 +17,7 @@ async fn main() -> Void {
     let args: Vec<String> = std::env::args().collect();
     let screen_name = &args[1];
 
-    let twitter_client = cancelculture::twitter::Client::from_config_file("keys.toml").await?;
+    let twitter_client = twitter::Client::from_config_file("keys.toml").await?;
     let client = Client::new();
 
     let tweets = twitter_client

@@ -1,4 +1,4 @@
-use cancelculture::twitter::{store::Store, Client};
+use cancel_culture::twitter::{store::Store, Client};
 use clap::{crate_authors, crate_version, Clap};
 use egg_mode::user::TwitterUser;
 use futures::{stream::LocalBoxStream, StreamExt, TryStreamExt};

@@ -1,5 +1,5 @@
-use cancelculture::browser::twitter::parser::{extract_description, extract_tweets, parse_gz};
-use cancelculture::wayback::Store;
+use cancel_culture::browser::twitter::parser::{extract_description, extract_tweets, parse_gz};
+use cancel_culture::wayback::Store;
 use flate2::read::GzDecoder;
 use std::fs::File;
 use std::io::Read;

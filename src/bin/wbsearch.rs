@@ -1,4 +1,4 @@
-use cancelculture::browser;
+use cancel_culture::browser;
 use chrono::NaiveDate;
 use clap::{crate_authors, crate_version, Clap};
 use fantoccini::{Client, Element, Locator};

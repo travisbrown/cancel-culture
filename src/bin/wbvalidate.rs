@@ -1,4 +1,4 @@
-use cancelculture::wayback::Store;
+use cancel_culture::wayback::Store;
 use std::fs::File;
 use std::path::Path;
 
