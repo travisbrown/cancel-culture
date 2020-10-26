@@ -1,32 +1,26 @@
-mod method_limit;
 mod stream;
 
+use super::{Method, MethodLimitStore};
 pub use stream::{Pageable, TimelineScrollback};
 
-use super::Method;
-use method_limit::MethodLimits;
-
-use chrono::{TimeZone, Utc};
-use egg_mode::error::Result;
-use egg_mode::service::rate_limit_status;
-use egg_mode::Token;
+use egg_mode::{error::Result, service::rate_limit_status, Token};
 use futures::{stream::LocalBoxStream, StreamExt, TryStreamExt};
 use log::warn;
 use tokio::time::delay_for;
 
 pub(crate) struct RateLimitedClient {
-    limits: MethodLimits,
+    limits: MethodLimitStore,
 }
 
 impl RateLimitedClient {
     pub(crate) async fn new(token: Token) -> Result<RateLimitedClient> {
         let status = rate_limit_status(&token).await?.response;
-        let limits = MethodLimits::from(status);
+        let limits = MethodLimitStore::from(status);
 
         Ok(RateLimitedClient { limits })
     }
 
-    pub(crate) fn to_stream<'a, L: Pageable<'a> + 'a>(
+    pub(crate) fn make_stream<'a, L: Pageable<'a> + 'a>(
         &self,
         loader: L,
         method: &Method,
@@ -40,11 +34,11 @@ impl RateLimitedClient {
                     let res: Result<Option<_>> = Ok(None);
                     res
                 } else {
-                    if let Some(delay) = limit.delay() {
+                    if let Some(delay) = limit.wait_duration() {
                         warn!(
                             "Waiting for {:?} for rate limit reset at {:?}",
                             delay,
-                            Utc.timestamp(limit.reset().into(), 0)
+                            limit.reset_time()
                         );
                         delay_for(delay).await;
                     }

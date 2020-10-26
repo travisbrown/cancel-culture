@@ -1,14 +1,17 @@
-use super::super::ResponseFuture;
-
 use egg_mode::{
     cursor::{Cursor, CursorIter},
-    error::Error,
+    error::{Error, Result},
     tweet::{Timeline, Tweet},
     Response,
 };
-use futures::{future::err, FutureExt, TryFutureExt};
+use futures::{
+    future::{err, LocalBoxFuture},
+    FutureExt, TryFutureExt,
+};
 use serde::de::DeserializeOwned;
 use std::iter::Peekable;
+
+type ResponseFuture<'a, T> = LocalBoxFuture<'a, Result<Response<T>>>;
 
 pub trait Pageable<'a> {
     type Item: 'static;

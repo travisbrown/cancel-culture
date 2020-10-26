@@ -3,6 +3,9 @@ use egg_mode::service::{
 };
 
 #[derive(Debug, Eq, Hash, PartialEq)]
+/// A Twitter API method.
+///
+/// This enum is a simple wrapper for egg-mode's individual unrelated method types.
 pub enum Method {
     ///A method from the `direct` module.
     Direct(DirectMethod),

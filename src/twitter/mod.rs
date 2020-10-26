@@ -1,22 +1,22 @@
 pub mod config;
 mod error;
 mod method;
+mod method_limit;
 mod rate_limited;
 pub mod store;
 pub mod timeline;
 
 pub use error::Error;
 pub use method::Method;
+pub use method_limit::{MethodLimit, MethodLimitStore};
 use rate_limited::{RateLimitedClient, TimelineScrollback};
 
-use egg_mode::tweet::Tweet;
-use egg_mode::user::{TwitterUser, UserID};
-use egg_mode::{KeyPair, Response, Token};
-use futures::{
-    future::{try_join_all, LocalBoxFuture},
-    stream::LocalBoxStream,
-    FutureExt, TryStreamExt,
+use egg_mode::{
+    tweet::Tweet,
+    user::{TwitterUser, UserID},
+    KeyPair, Token,
 };
+use futures::{future::try_join_all, stream::LocalBoxStream, FutureExt, TryStreamExt};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
@@ -25,7 +25,6 @@ use std::time::Duration;
 
 pub type Result<T> = std::result::Result<T, Error>;
 pub type EggModeResult<T> = std::result::Result<T, egg_mode::error::Error>;
-type ResponseFuture<'a, T> = LocalBoxFuture<'a, EggModeResult<Response<T>>>;
 
 const TWEET_LOOKUP_PAGE_SIZE: usize = 100;
 const USER_FOLLOWER_IDS_PAGE_SIZE: i32 = 5000;
@@ -95,7 +94,7 @@ impl Client {
         with_replies: bool,
         with_rts: bool,
     ) -> LocalBoxStream<EggModeResult<Tweet>> {
-        self.app_limited_client.to_stream(
+        self.app_limited_client.make_stream(
             TimelineScrollback::new(
                 egg_mode::tweet::user_timeline(acct, with_replies, with_rts, &self.app_token)
                     .with_page_size(USER_TIMELINE_PAGE_SIZE),
@@ -109,7 +108,7 @@ impl Client {
             .with_page_size(USER_FOLLOWER_IDS_PAGE_SIZE);
 
         self.app_limited_client
-            .to_stream(cursor, Method::USER_FOLLOWER_IDS)
+            .make_stream(cursor, Method::USER_FOLLOWER_IDS)
     }
 
     pub fn followed_ids<T: Into<UserID>>(&self, acct: T) -> LocalBoxStream<EggModeResult<u64>> {
@@ -117,7 +116,7 @@ impl Client {
             .with_page_size(USER_FOLLOWED_IDS_PAGE_SIZE);
 
         self.app_limited_client
-            .to_stream(cursor, Method::USER_FOLLOWED_IDS)
+            .make_stream(cursor, Method::USER_FOLLOWED_IDS)
     }
 
     pub fn follower_ids_self(&self) -> LocalBoxStream<EggModeResult<u64>> {
@@ -147,7 +146,7 @@ impl Client {
         let iter = futs.into_iter();
 
         self.app_limited_client
-            .to_stream(iter.peekable(), Method::USER_LOOKUP)
+            .make_stream(iter.peekable(), Method::USER_LOOKUP)
     }
 
     pub async fn get_in_reply_to(&self, id: u64) -> EggModeResult<Option<(String, u64)>> {
