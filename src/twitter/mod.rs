@@ -5,18 +5,22 @@ mod method_limit;
 mod rate_limited;
 pub mod store;
 pub mod timeline;
+mod tweet_lister;
 
 pub use error::Error;
 pub use method::Method;
 pub use method_limit::{MethodLimit, MethodLimitStore};
 use rate_limited::{RateLimitedClient, TimelineScrollback};
+pub use tweet_lister::TweetLister;
 
 use egg_mode::{
     tweet::Tweet,
     user::{TwitterUser, UserID},
     KeyPair, Token,
 };
-use futures::{future::try_join_all, stream::LocalBoxStream, FutureExt, TryStreamExt};
+use futures::{
+    future::try_join_all, stream::LocalBoxStream, FutureExt, TryFutureExt, TryStreamExt,
+};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
@@ -125,6 +129,12 @@ impl Client {
 
     pub fn followed_ids_self(&self) -> LocalBoxStream<EggModeResult<u64>> {
         self.followed_ids(self.user.id)
+    }
+
+    pub async fn lookup_user<T: Into<UserID>>(&self, id: T) -> EggModeResult<TwitterUser> {
+        egg_mode::user::show(id, &self.app_token)
+            .map_ok(|response| response.response)
+            .await
     }
 
     pub fn lookup_users<'a, T, I: IntoIterator<Item = T>>(

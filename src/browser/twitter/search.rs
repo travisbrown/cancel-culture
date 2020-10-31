@@ -1,27 +1,46 @@
 use super::super::Scroller;
 use chrono::{format::ParseError, NaiveDate};
-use fantoccini::{error::CmdError, Client, Locator};
+use fantoccini::{Client, Locator};
 use futures::{future::BoxFuture, FutureExt};
 use regex::Regex;
+use std::time::Duration;
+use tokio::time::delay_for;
 
-pub struct UserTweetSearch(String, NaiveDate, NaiveDate, String, Regex);
+pub struct UserTweetSearch {
+    screen_name: String,
+    from: NaiveDate,
+    to: NaiveDate,
+    search_url: String,
+    pattern: Regex,
+}
 
 impl UserTweetSearch {
     const TWEET_LINK_LOC: Locator<'static> = Locator::XPath("//a[contains(@href, '/status/')]");
+    const NO_RESULTS_LOC: Locator<'static> =
+        Locator::XPath("//span[contains(text(), 'No results for ')]");
+    const RATE_LIMIT_LOC: Locator<'static> =
+        Locator::XPath("//span[contains(text(), 'Something went wrong')]");
     const SEARCH_DATE_FMT: &'static str = "%Y-%m-%d";
+    const SPLIT_CUTOFF: usize = 40;
+    const BROWSER_RATE_LIMIT_WAIT_SECONDS: u64 = 250;
+
+    pub fn new(screen_name: &str, from: &NaiveDate, to: &NaiveDate) -> Self {
+        let pattern = format!("{}/status/(\\d+)$", screen_name);
+
+        UserTweetSearch {
+            screen_name: screen_name.to_string(),
+            from: *from,
+            to: *to,
+            search_url: Self::make_url(screen_name, from, to),
+            pattern: Regex::new(&pattern).unwrap(),
+        }
+    }
 
     pub fn parse(screen_name: &str, from: &str, to: &str) -> Result<Self, ParseError> {
         let from_date = NaiveDate::parse_from_str(&from, Self::SEARCH_DATE_FMT)?;
         let to_date = NaiveDate::parse_from_str(&to, Self::SEARCH_DATE_FMT)?;
-        let pattern = format!("{}/status/\\d+$", screen_name);
 
-        Ok(UserTweetSearch(
-            screen_name.to_string(),
-            from_date,
-            to_date,
-            Self::make_url(screen_name, &from_date, &to_date),
-            Regex::new(&pattern).unwrap(),
-        ))
+        Ok(Self::new(screen_name, &from_date, &to_date))
     }
 
     fn make_url(screen_name: &str, from: &NaiveDate, to: &NaiveDate) -> String {
@@ -32,14 +51,52 @@ impl UserTweetSearch {
             from.format(Self::SEARCH_DATE_FMT)
         )
     }
+
+    pub async fn extract_all_split(&self, client: &mut Client) -> Result<Vec<u64>, anyhow::Error> {
+        let all = self.extract_all(client).await?;
+        let len = (self.to - self.from).num_days();
+
+        if all.len() >= Self::SPLIT_CUTOFF && len > 1 {
+            let mut result = Vec::with_capacity(all.len());
+
+            for day in self.from.iter_days().take_while(|day| *day < self.to) {
+                result.extend(
+                    Self::new(&self.screen_name, &day, &day.succ())
+                        .extract_all(client)
+                        .await?,
+                );
+            }
+
+            Ok(result)
+        } else {
+            Ok(all)
+        }
+    }
 }
 
 impl Scroller for UserTweetSearch {
-    type Item = String;
-    type Err = CmdError;
+    type Item = u64;
+    type Err = anyhow::Error;
 
-    fn init<'a>(&'a self, client: &'a mut Client) -> BoxFuture<'a, Result<(), Self::Err>> {
-        client.goto(&self.3).boxed()
+    fn init<'a>(&'a self, client: &'a mut Client) -> BoxFuture<'a, Result<bool, Self::Err>> {
+        async move {
+            client.goto(&self.search_url).await?;
+            delay_for(Duration::from_millis(750)).await;
+            log::info!("Checking: {}", self.search_url);
+
+            if client.find_all(Self::NO_RESULTS_LOC).await?.is_empty() {
+                if !client.find_all(Self::RATE_LIMIT_LOC).await?.is_empty() {
+                    delay_for(Duration::from_secs(Self::BROWSER_RATE_LIMIT_WAIT_SECONDS)).await;
+
+                    self.init(client).await
+                } else {
+                    Ok(true)
+                }
+            } else {
+                Ok(false)
+            }
+        }
+        .boxed()
     }
 
     fn extract<'a>(
@@ -49,17 +106,19 @@ impl Scroller for UserTweetSearch {
         async move {
             let elements = client.find_all(Self::TWEET_LINK_LOC).await?;
 
-            let mut urls = Vec::with_capacity(elements.len());
+            let mut ids = Vec::with_capacity(elements.len());
 
             for mut element in elements {
-                if let Some(url) = element.attr("href").await? {
-                    if self.4.is_match(&url) {
-                        urls.push(url);
+                if let Ok(Some(url)) = element.attr("href").await {
+                    if let Some(caps) = self.pattern.captures(&url) {
+                        if let Ok(id) = caps[1].parse::<u64>() {
+                            ids.push(id);
+                        }
                     }
                 }
             }
 
-            Ok(urls)
+            Ok(ids)
         }
         .boxed()
     }

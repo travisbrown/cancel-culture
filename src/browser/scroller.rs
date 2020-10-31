@@ -10,7 +10,7 @@ pub trait Scroller {
     type Item;
     type Err: From<CmdError> + Send + 'static;
 
-    fn init<'a>(&'a self, client: &'a mut Client) -> BoxFuture<'a, Result<(), Self::Err>>;
+    fn init<'a>(&'a self, client: &'a mut Client) -> BoxFuture<'a, Result<bool, Self::Err>>;
     fn extract<'a>(
         &'a self,
         client: &'a mut Client,
@@ -25,7 +25,7 @@ pub trait Scroller {
     }
 
     fn wait() -> Option<Duration> {
-        Some(Duration::from_millis(500))
+        Some(Duration::from_millis(250))
     }
 
     fn max_attempts() -> usize {
@@ -41,42 +41,47 @@ pub trait Scroller {
         Self: Sized + Send + Sync,
     {
         async move {
-            self.init(client).await?;
-            if let Some(duration) = Self::wait() {
-                delay_for(duration).await;
-            }
+            let non_empty = self.init(client).await?;
 
-            let mut result = self.extract(client).await?;
-            let mut seen = HashSet::new();
-            seen.extend(result.iter().cloned());
-
-            let mut remaining = Self::max_attempts();
-
-            while remaining > 0 {
-                Self::advance(client).await?;
+            if non_empty {
                 if let Some(duration) = Self::wait() {
                     delay_for(duration).await;
                 }
 
-                let batch = self.extract(client).await?;
-                let mut empty = true;
+                let mut result = self.extract(client).await?;
+                let mut seen = HashSet::new();
+                seen.extend(result.iter().cloned());
 
-                for item in batch.into_iter() {
-                    if !seen.contains(&item) {
-                        empty = false;
-                        seen.insert(item.clone());
-                        result.push(item);
+                let mut remaining = Self::max_attempts();
+
+                while remaining > 0 {
+                    Self::advance(client).await?;
+                    if let Some(duration) = Self::wait() {
+                        delay_for(duration).await;
+                    }
+
+                    let batch = self.extract(client).await?;
+                    let mut empty = true;
+
+                    for item in batch.into_iter() {
+                        if !seen.contains(&item) {
+                            empty = false;
+                            seen.insert(item.clone());
+                            result.push(item);
+                        }
+                    }
+
+                    if empty {
+                        remaining -= 1;
+                    } else {
+                        remaining = Self::max_attempts();
                     }
                 }
 
-                if empty {
-                    remaining -= 1;
-                } else {
-                    remaining = Self::max_attempts();
-                }
+                Ok(result)
+            } else {
+                Ok(vec![])
             }
-
-            Ok(result)
         }
         .boxed()
     }

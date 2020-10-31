@@ -1,4 +1,4 @@
-use cancel_culture::browser::{make_client_or_panic, twitter::search::UserTweetSearch, Scroller};
+use cancel_culture::browser::make_client_or_panic;
 use clap::{crate_authors, crate_version, Clap};
 
 #[tokio::main]
@@ -11,7 +11,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let opts: Opts = Opts::parse();
 
-    let mut client = make_client_or_panic(
+    let mut browser = make_client_or_panic(
         &opts.browser,
         !opts.disable_headless,
         opts.host.as_deref(),
@@ -19,13 +19,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await;
 
-    let search = UserTweetSearch::parse(&opts.screen_name, &opts.from, &opts.to)?;
-    let urls = search.extract_all(&mut client).await?;
+    let client = cancel_culture::twitter::Client::from_config_file(&opts.key_file).await?;
+    let mut lister = cancel_culture::twitter::TweetLister::new(&client, &mut browser);
 
-    log::info!("Found {}", urls.len());
+    let (mut ids, expected) = lister.get_all(opts.screen_name).await?;
 
-    for url in urls {
-        println!("{}", url);
+    log::info!("Found: {}, expected: {}", ids.len(), expected);
+
+    ids.sort_unstable();
+
+    for id in ids {
+        println!("{}", id);
     }
 
     Ok(())
@@ -34,12 +38,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[derive(Clap)]
 #[clap(version = crate_version!(), author = crate_authors!())]
 struct Opts {
+    /// TOML file containing Twitter API keys
+    #[clap(short, long, default_value = "keys.toml")]
+    key_file: String,
     #[clap(short = 'u', long)]
     screen_name: String,
-    #[clap(short = 'f', long)]
-    from: String,
-    #[clap(short = 't', long)]
-    to: String,
     #[clap(short, long)]
     host: Option<String>,
     #[clap(short, long)]
