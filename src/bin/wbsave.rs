@@ -1,8 +1,6 @@
-use cancel_culture::twitter;
-use futures::TryStreamExt;
-use reqwest::{Client, StatusCode};
-use std::time::Duration;
-use tokio::time::delay_for;
+use cancel_culture::wayback;
+use clap::{crate_authors, crate_version, Clap};
+use std::io::BufRead;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
 
@@ -14,44 +12,45 @@ async fn main() -> Void {
         simplelog::TerminalMode::Stderr,
     );
 
-    let args: Vec<String> = std::env::args().collect();
-    let screen_name = &args[1];
+    let opts: Opts = Opts::parse();
 
-    let twitter_client = twitter::Client::from_config_file("keys.toml").await?;
-    let client = Client::new();
+    let fantoccini_client = cancel_culture::browser::make_client_or_panic(
+        &opts.browser,
+        !opts.disable_headless,
+        opts.host.as_deref(),
+        opts.port,
+    )
+    .await;
 
-    let tweets = twitter_client
-        .tweets(screen_name.to_owned(), true, true)
-        .map_ok(move |status| {
-            (
-                status.id,
-                format!("https://twitter.com/{}/status/{}", screen_name, status.id),
-            )
-        })
-        .try_collect::<Vec<_>>()
-        .await?;
+    let mut client = wayback::web::Client::new(fantoccini_client);
+    client.login(&opts.username, &opts.password).await?;
 
-    for (_, url) in tweets.into_iter().skip(30) {
-        log::info!("Saving: {}", url);
-        let data = [("url", url)];
-        let response = client
-            .post("https://web.archive.org/save")
-            .form(&data)
-            .header("Referer", "https://web.archive.org/save")
-            .send()
-            .await?;
+    let stdin = std::io::stdin();
+    let urls = stdin.lock().lines();
 
-        let status = response.status();
-        let headers = response.headers().clone();
-        let body = response.text().await?;
+    for result in urls {
+        let url = result.expect("Invalid input");
 
-        if status == StatusCode::TOO_MANY_REQUESTS
-            || body.contains("reached the limit of active sessions")
-        {
-            println!("Headers: {:?}", headers);
-            delay_for(Duration::from_secs(300)).await;
-        }
+        let saved_url = client.save(&url).await?;
+        println!("{}", saved_url);
     }
 
     Ok(())
+}
+
+#[derive(Clap)]
+#[clap(version = crate_version!(), author = crate_authors!())]
+struct Opts {
+    #[clap(short = 'u', long)]
+    username: String,
+    #[clap(short = 'x', long)]
+    password: String,
+    #[clap(short, long)]
+    host: Option<String>,
+    #[clap(short, long)]
+    port: Option<u16>,
+    #[clap(short = 'n', long)]
+    disable_headless: bool,
+    #[clap(short, long, default_value = "chrome")]
+    browser: String,
 }

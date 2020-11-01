@@ -1,3 +1,4 @@
+use fantoccini::error::CmdError;
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug)]
@@ -7,6 +8,7 @@ pub enum Error {
     FileIOError(std::io::Error),
     StoreContentsDecodingError(csv::Error),
     StoreContentsEncodingError(Box<csv::IntoInnerError<csv::Writer<Vec<u8>>>>),
+    BrowserError(CmdError),
 }
 
 impl Display for Error {
@@ -38,5 +40,11 @@ impl From<csv::Error> for Error {
 impl From<csv::IntoInnerError<csv::Writer<Vec<u8>>>> for Error {
     fn from(e: csv::IntoInnerError<csv::Writer<Vec<u8>>>) -> Self {
         Error::StoreContentsEncodingError(Box::new(e))
+    }
+}
+
+impl From<CmdError> for Error {
+    fn from(e: CmdError) -> Self {
+        Error::BrowserError(e)
     }
 }
