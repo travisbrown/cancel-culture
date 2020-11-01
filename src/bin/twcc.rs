@@ -154,7 +154,7 @@ async fn main() -> Result<()> {
             limit,
             ref screen_name,
         }) => {
-            let wayback_client = wayback::Client::new();
+            let wayback_client = wayback::cdx::Client::new();
             let url = format!("twitter.com/{}/status/*", screen_name);
             let mut items = wayback_client.search(&url).await?;
 
