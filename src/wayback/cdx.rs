@@ -1,6 +1,6 @@
 use super::{Item, Result, Store};
 use bytes::Bytes;
-use futures::{Future, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{Future, FutureExt, StreamExt, TryStreamExt};
 use log::info;
 use reqwest::Client as RClient;
 
@@ -57,7 +57,14 @@ impl Client {
             .try_for_each_concurrent(limit, move |item| {
                 info!("Downloading {}", item.url);
                 self.download(item, true)
-                    .and_then(move |bytes| store.add(item, bytes))
+                    .then(move |bytes_result| match bytes_result {
+                        Ok(bytes) => store.add(item, bytes).boxed_local(),
+                        Err(_) => async move {
+                            log::warn!("Unable to download {}", item.url);
+                            Ok(())
+                        }
+                        .boxed_local(),
+                    })
             })
     }
 }
