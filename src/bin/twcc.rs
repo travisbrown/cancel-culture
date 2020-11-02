@@ -293,6 +293,8 @@ async fn main() -> Result<()> {
                 println!(
                     "an open source project by [Travis Brown](https://twitter.com/travisbrown)."
                 );
+                println!("You can create your own updated version of this document by checking out and configuring the repository and then running the following commands:");
+                println!("```bash\n$ cargo build --release\n$ target/release/twcc deleted-tweets --report {}\n```", screen_name);
                 println!("Please note that all tweets quoted here are sourced from the [Wayback Archive](https://web.archive.org) and were not directly accessed through the Twitter API or any Twitter client.");
 
                 for (id, (tweet, item)) in report_items_vec {
