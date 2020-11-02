@@ -2,17 +2,18 @@ use chrono::{DateTime, TimeZone, Utc};
 use flate2::read::GzDecoder;
 use lazy_static::lazy_static;
 use scraper::element_ref::ElementRef;
+use scraper::node::Node;
 use scraper::selector::Selector;
 use scraper::Html;
 use std::io::Read;
 
 #[derive(Debug)]
 pub struct BrowserTweet {
-    id: u64,
-    time: DateTime<Utc>,
+    pub id: u64,
+    pub time: DateTime<Utc>,
     user_id: u64,
-    user_screen_name: String,
-    text: String,
+    pub user_screen_name: String,
+    pub text: String,
 }
 
 lazy_static! {
@@ -21,6 +22,14 @@ lazy_static! {
     static ref TWEET_DIV_SEL: Selector = Selector::parse("div.tweet").unwrap();
     static ref DESCRIPTION_SEL: Selector =
         Selector::parse("meta[property='og:description']").unwrap();
+}
+
+pub fn parse<R: Read>(input: &mut R) -> Result<Html, std::io::Error> {
+    let mut html = String::new();
+
+    input.read_to_string(&mut html)?;
+
+    Ok(Html::parse_document(&html))
 }
 
 pub fn parse_gz<R: Read>(input: &mut R) -> Result<Html, std::io::Error> {
@@ -61,10 +70,27 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
             .attr("data-time")
             .and_then(|v| v.parse::<i64>().ok())
     });
-    let text = element_ref
-        .select(&TEXT_SEL)
-        .next()
-        .and_then(|el| el.text().next());
+    let text = element_ref.select(&TEXT_SEL).next().map(|el| {
+        let mut result = String::new();
+
+        for child_ref in el.children() {
+            match child_ref.value() {
+                Node::Text(text) => {
+                    result.push_str(&text.text);
+                }
+                Node::Element(child_el) => {
+                    if child_el.name() == "img" {
+                        if let Some(alt) = child_el.attr("alt") {
+                            result.push_str(alt);
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        result
+    });
 
     id.zip(user_id)
         .zip(user_screen_name)
