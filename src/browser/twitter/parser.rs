@@ -83,6 +83,18 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
                         if let Some(alt) = child_el.attr("alt") {
                             result.push_str(alt);
                         }
+                    } else if child_el.name() == "a" {
+                        let text = ElementRef::wrap(child_ref)
+                            .unwrap()
+                            .text()
+                            .map(|t| t.trim())
+                            .filter(|v| !v.is_empty() && !v.starts_with("pic.twitter.com"))
+                            .collect::<Vec<_>>()
+                            .join("");
+
+                        if !text.starts_with("http") {
+                            result.push_str(&text);
+                        }
                     }
                 }
                 _ => (),
