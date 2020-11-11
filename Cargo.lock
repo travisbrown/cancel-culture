@@ -173,6 +173,7 @@ dependencies = [
  "serde_json",
  "sha-1 0.9.2",
  "simplelog",
+ "tinytemplate",
  "tokio",
  "tokio-test",
  "toml",
@@ -2222,6 +2223,16 @@ dependencies = [
  "quote",
  "standback",
  "syn",
+]
+
+[[package]]
+name = "tinytemplate"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d3dc76004a03cec1c5932bca4cdc2e39aaa798e3f82363dd94f9adf6098c12f"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
