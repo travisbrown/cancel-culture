@@ -114,7 +114,7 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
                 time: Utc.timestamp(timestamp, 0),
                 user_id,
                 user_screen_name: user_screen_name.to_string(),
-                text: text.to_string(),
+                text,
             },
         )
 }

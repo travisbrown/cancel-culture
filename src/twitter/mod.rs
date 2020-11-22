@@ -137,10 +137,10 @@ impl Client {
             .await
     }
 
-    pub fn lookup_users<'a, T, I: IntoIterator<Item = T>>(
-        &'a self,
+    pub fn lookup_users<T, I: IntoIterator<Item = T>>(
+        &self,
         ids: I,
-    ) -> LocalBoxStream<'a, EggModeResult<TwitterUser>>
+    ) -> LocalBoxStream<EggModeResult<TwitterUser>>
     where
         T: Into<UserID> + Unpin + Send,
     {

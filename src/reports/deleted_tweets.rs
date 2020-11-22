@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::fmt::{Display, Error, Formatter};
 use std::result::Result;
 
-static TEMPLATE: &'static str = "## Deleted tweets for {screen_name}
+static TEMPLATE: &str = "## Deleted tweets for {screen_name}
 
 The list below includes {deleted_count} deleted tweets by
 [{screen_name}](https://twitter.com/{screen_name}).

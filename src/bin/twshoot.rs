@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         img.save(full_path)?;
 
-        let as_rgba = img.into_rgba();
+        let as_rgba = img.into_rgba8();
 
         if let Some((x, y, w, h)) = browser::twitter::crop_tweet(&as_rgba) {
             let clipping = DynamicImage::ImageRgba8(as_rgba).crop(x, y, w, h);
