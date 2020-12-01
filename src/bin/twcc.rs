@@ -253,8 +253,18 @@ async fn main() -> Result<()> {
 
                         let html = scraper::Html::parse_document(&content);
 
-                        let tweets =
+                        let mut tweets =
                             cancel_culture::browser::twitter::parser::extract_tweets(&html);
+
+                        if tweets.is_empty() {
+                            if let Some(tweet) =
+                                cancel_culture::browser::twitter::parser::extract_tweets_json(
+                                    &content,
+                                )
+                            {
+                                tweets.push(tweet);
+                            }
+                        }
 
                         if tweets.is_empty() {
                             log::warn!("Unable to find tweets for {}", item.url);
@@ -304,11 +314,12 @@ async fn main() -> Result<()> {
 
                     if *deleted_status.get(id).unwrap_or(&false) {
                         println!(
-                            "* [{}](https://web.archive.org/web/{}/{}) ([live]({})): {}",
+                            "* [{}](https://web.archive.org/web/{}/{}) ([live](https://twitter.com/{}/status/{})): {}",
                             time,
                             item.timestamp(),
                             item.url,
-                            item.url,
+                            tweet.user_screen_name,
+                            tweet.id,
                             escape_tweet_text(&tweet.text)
                         );
                     } else {

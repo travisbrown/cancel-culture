@@ -8,7 +8,7 @@ static TEMPLATE: &str = "## Deleted tweets for {screen_name}
 The list below includes {deleted_count} deleted tweets by
 [{screen_name}](https://twitter.com/{screen_name}).
 
-{{if undeleted_count}}There are also {undeleted_count} tweets that are indicated as not currently
+{{if undeleted_exist}}There are also {undeleted_count} tweets that are indicated as not currently
 deleted by the Twitter API that have been scraped from pages of deleted tweets (as replies, etc.).
 These possibly undeleted tweets are included for context and are indicated by a _(live)_ link.
 {{else}}{{endif}}
@@ -22,6 +22,7 @@ repository and then running the following commands:
 ```bash
 $ cargo build --release
 $ target/release/twcc deleted-tweets --report {screen_name}
+```
 
 Please note that all tweets quoted here are sourced from the
 [Wayback Machine](https://web.archive.org) and were not directly accessed through the Twitter API or
@@ -33,6 +34,7 @@ pub struct DeletedTweetReport<'a> {
     screen_name: &'a str,
     deleted_count: usize,
     undeleted_count: usize,
+    undeleted_exist: bool,
 }
 
 impl<'a> DeletedTweetReport<'a> {
@@ -45,6 +47,7 @@ impl<'a> DeletedTweetReport<'a> {
             screen_name,
             deleted_count,
             undeleted_count,
+            undeleted_exist: undeleted_count > 0,
         }
     }
 }

@@ -5,6 +5,7 @@ use scraper::element_ref::ElementRef;
 use scraper::node::Node;
 use scraper::selector::Selector;
 use scraper::Html;
+use serde::Deserialize;
 use std::io::Read;
 
 #[derive(Debug)]
@@ -14,6 +15,42 @@ pub struct BrowserTweet {
     user_id: u64,
     pub user_screen_name: String,
     pub text: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TweetUserJson {
+    id: u64,
+    screen_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExtendedTweetJson {
+    full_text: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TweetJson {
+    id: u64,
+    timestamp_ms: String,
+    user: TweetUserJson,
+    text: String,
+    extended_tweet: Option<ExtendedTweetJson>,
+}
+
+impl TweetJson {
+    fn to_browser_tweet(self) -> BrowserTweet {
+        BrowserTweet {
+            id: self.id,
+            time: Utc.timestamp_millis(
+                self.timestamp_ms
+                    .parse::<i64>()
+                    .expect("Invalid timestamp_ms value"),
+            ),
+            user_id: self.user.id,
+            user_screen_name: self.user.screen_name,
+            text: self.extended_tweet.map_or(self.text, |et| et.full_text),
+        }
+    }
 }
 
 lazy_static! {
@@ -53,6 +90,11 @@ pub fn extract_tweets(doc: &Html) -> Vec<BrowserTweet> {
     doc.select(&TWEET_DIV_SEL)
         .filter_map(|el| extract_div_tweet(&el))
         .collect()
+}
+
+pub fn extract_tweets_json(content: &str) -> Option<BrowserTweet> {
+    let t: serde_json::Result<TweetJson> = serde_json::from_str(content);
+    t.ok().map(|v| v.to_browser_tweet())
 }
 
 fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
