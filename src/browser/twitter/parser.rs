@@ -38,7 +38,7 @@ struct TweetJson {
 }
 
 impl TweetJson {
-    fn to_browser_tweet(self) -> BrowserTweet {
+    fn into_browser_tweet(self) -> BrowserTweet {
         BrowserTweet {
             id: self.id,
             time: Utc.timestamp_millis(
@@ -94,7 +94,7 @@ pub fn extract_tweets(doc: &Html) -> Vec<BrowserTweet> {
 
 pub fn extract_tweets_json(content: &str) -> Option<BrowserTweet> {
     let t: serde_json::Result<TweetJson> = serde_json::from_str(content);
-    t.ok().map(|v| v.to_browser_tweet())
+    t.ok().map(|v| v.into_browser_tweet())
 }
 
 fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
