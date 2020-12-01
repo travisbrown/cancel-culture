@@ -220,6 +220,20 @@ async fn main() -> Result<()> {
 
             let mut report_items = HashMap::<u64, (BrowserTweet, wayback::Item)>::new();
 
+            if let Some(s) = store.as_ref() {
+                let mut items = Vec::with_capacity(by_id.len());
+                for (id, _) in &deleted {
+                    if let Some(item) = by_id.get(&id) {
+                        if s.read(&item.digest).unwrap_or_default().is_none() {
+                            items.push(item.clone());
+                        }
+                    }
+                }
+
+                log::info!("Saving {} items to store", items.len());
+                wayback_client.save_all(s, &items, 4).await?;
+            }
+
             for (id, _) in deleted {
                 if let Some(item) = by_id.get(&id) {
                     if report {
