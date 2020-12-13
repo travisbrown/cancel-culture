@@ -131,6 +131,86 @@ async fn main() -> Result<()> {
 
             Ok(())
         }
+        SubCommand::FollowerReport(FollowerReport { screen_name }) => {
+            let blocks = client.blocks().await?.into_iter().collect::<HashSet<u64>>();
+            let their_followers = client
+                .follower_ids(screen_name.clone())
+                .try_collect::<HashSet<u64>>()
+                .await?;
+
+            let your_followers = client
+                .follower_ids_self()
+                .try_collect::<HashSet<u64>>()
+                .await?;
+
+            let your_followeds = client
+                .followed_ids_self()
+                .try_collect::<HashSet<u64>>()
+                .await?;
+
+            let blocked_followers = blocks
+                .intersection(&their_followers)
+                .cloned()
+                .collect::<HashSet<u64>>();
+            let shared_followers = your_followers
+                .intersection(&their_followers)
+                .cloned()
+                .collect::<HashSet<u64>>();
+            let followed_followers = your_followeds
+                .intersection(&their_followers)
+                .cloned()
+                .collect::<HashSet<u64>>();
+
+            let common = blocked_followers
+                .union(&shared_followers)
+                .cloned()
+                .collect::<HashSet<u64>>()
+                .union(&followed_followers)
+                .cloned()
+                .collect::<HashSet<u64>>();
+            let mut common_users = client.lookup_users(common).try_collect::<Vec<_>>().await?;
+
+            common_users.sort_by_key(|user| user.id);
+
+            println!("{} has {} followers", screen_name, their_followers.len());
+            println!(
+                "{} has {} followers who follow you",
+                screen_name,
+                shared_followers.len()
+            );
+
+            for user in &common_users {
+                if shared_followers.contains(&user.id) {
+                    println!("  {:20} {}", user.id, user.screen_name);
+                }
+            }
+
+            println!(
+                "{} has {} followers you follow",
+                screen_name,
+                followed_followers.len()
+            );
+
+            for user in &common_users {
+                if followed_followers.contains(&user.id) {
+                    println!("  {:20} {}", user.id, user.screen_name);
+                }
+            }
+
+            println!(
+                "{} has {} followers you've blocked",
+                screen_name,
+                blocked_followers.len()
+            );
+
+            for user in common_users {
+                if blocked_followers.contains(&user.id) {
+                    println!("  {:20} {}", user.id, user.screen_name);
+                }
+            }
+
+            Ok(())
+        }
         SubCommand::CheckExistence => {
             let stdin = std::io::stdin();
             let mut buffer = String::new();
@@ -367,6 +447,8 @@ enum SubCommand {
     #[clap(version = crate_version!(), author = crate_authors!())]
     BlockedFollows(BlockedFollows),
     #[clap(version = crate_version!(), author = crate_authors!())]
+    FollowerReport(FollowerReport),
+    #[clap(version = crate_version!(), author = crate_authors!())]
     LookupReply(LookupReply),
     /// Checks whether a list of status IDs (from stdin) still exist
     #[clap(version = crate_version!(), author = crate_authors!())]
@@ -392,6 +474,12 @@ struct LookupReply {
 /// For a given user, list everyone they follow who you block
 #[derive(Clap)]
 struct BlockedFollows {
+    screen_name: String,
+}
+
+/// For a given user, print a report about their followers
+#[derive(Clap)]
+struct FollowerReport {
     screen_name: String,
 }
 
