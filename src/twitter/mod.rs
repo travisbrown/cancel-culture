@@ -37,24 +37,27 @@ const USER_LOOKUP_PAGE_SIZE: usize = 100;
 const USER_TIMELINE_PAGE_SIZE: i32 = 200;
 
 pub struct Client {
-    token: Token,
+    user_token: Token,
     app_token: Token,
     user: TwitterUser,
+    user_limited_client: RateLimitedClient,
     app_limited_client: RateLimitedClient,
 }
 
 impl Client {
     async fn new(
-        token: Token,
+        user_token: Token,
         app_token: Token,
         user: TwitterUser,
     ) -> egg_mode::error::Result<Client> {
+        let user_limited_client = RateLimitedClient::new(user_token.clone()).await?;
         let app_limited_client = RateLimitedClient::new(app_token.clone()).await?;
 
         Ok(Client {
-            token,
+            user_token,
             app_token,
             user,
+            user_limited_client,
             app_limited_client,
         })
     }
@@ -86,7 +89,7 @@ impl Client {
     }
 
     pub async fn blocks(&self) -> EggModeResult<Vec<u64>> {
-        egg_mode::user::blocks_ids(&self.token)
+        egg_mode::user::blocks_ids(&self.user_token)
             .map_ok(|r| r.response)
             .try_collect()
             .await
@@ -124,11 +127,19 @@ impl Client {
     }
 
     pub fn follower_ids_self(&self) -> LocalBoxStream<EggModeResult<u64>> {
-        self.follower_ids(self.user.id)
+        let cursor = egg_mode::user::followers_ids(self.user.id, &self.user_token)
+            .with_page_size(USER_FOLLOWER_IDS_PAGE_SIZE);
+
+        self.user_limited_client
+            .make_stream(cursor, Method::USER_FOLLOWER_IDS)
     }
 
     pub fn followed_ids_self(&self) -> LocalBoxStream<EggModeResult<u64>> {
-        self.followed_ids(self.user.id)
+        let cursor = egg_mode::user::friends_ids(self.user.id, &self.user_token)
+            .with_page_size(USER_FOLLOWED_IDS_PAGE_SIZE);
+
+        self.user_limited_client
+            .make_stream(cursor, Method::USER_FOLLOWED_IDS)
     }
 
     pub async fn lookup_user<T: Into<UserID>>(&self, id: T) -> EggModeResult<TwitterUser> {
@@ -160,7 +171,7 @@ impl Client {
     }
 
     pub async fn get_in_reply_to(&self, id: u64) -> EggModeResult<Option<(String, u64)>> {
-        let res = egg_mode::tweet::lookup(vec![id], &self.token).await?;
+        let res = egg_mode::tweet::lookup(vec![id], &self.user_token).await?;
         let tweet = res.response.get(0);
 
         Ok(tweet.and_then(|t| {
@@ -206,7 +217,7 @@ impl Client {
     }
 
     pub async fn block_user<T: Into<UserID>>(&self, id: T) -> EggModeResult<TwitterUser> {
-        egg_mode::user::block(id, &self.token)
+        egg_mode::user::block(id, &self.user_token)
             .map_ok(|response| response.response)
             .await
     }
