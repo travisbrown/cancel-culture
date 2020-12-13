@@ -204,6 +204,12 @@ impl Client {
 
         timeline::make_stream(timeline, wait)
     }
+
+    pub async fn block_user<T: Into<UserID>>(&self, id: T) -> EggModeResult<TwitterUser> {
+        egg_mode::user::block(id, &self.token)
+            .map_ok(|response| response.response)
+            .await
+    }
 }
 
 const STATUS_PATTERN: &str = r"^http[s]?://twitter\.com/[^/]+/status/(\d+)(?:\?.+)?$";

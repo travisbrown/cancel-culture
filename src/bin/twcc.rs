@@ -82,6 +82,33 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
+        SubCommand::ImportBlocks => {
+            let stdin = std::io::stdin();
+            let mut buffer = String::new();
+            let mut handle = stdin.lock();
+            handle.read_to_string(&mut buffer)?;
+
+            let ids = buffer
+                .split_whitespace()
+                .flat_map(|input| input.parse::<u64>().ok())
+                .collect::<Vec<_>>();
+
+            for chunk in ids.chunks(128) {
+                for id in chunk {
+                    log::info!("Blocking user ID: {}", id);
+                }
+
+                let res =
+                    futures::future::try_join_all(chunk.iter().map(|id| client.block_user(*id)))
+                        .await?;
+
+                for user in res {
+                    log::warn!("Blocked user: {:12} {}", user.id, user.screen_name);
+                }
+            }
+
+            Ok(())
+        }
         SubCommand::ListTweets(ListTweets { screen_name }) => {
             let ids = client
                 .tweets(screen_name, true, true)
@@ -463,6 +490,9 @@ enum SubCommand {
     ListBlocks(ListBlocks),
     #[clap(version = crate_version!(), author = crate_authors!())]
     ListTweets(ListTweets),
+    /// Blocks a list of user IDs (from stdin)
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    ImportBlocks,
 }
 
 /// Get the URL of a tweet given the URL or status ID of a reply
