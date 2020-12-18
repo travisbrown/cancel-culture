@@ -56,10 +56,11 @@ twcc 0.1.0
 Travis Brown <travisrobertbrown@gmail.com>
 
 USAGE:
-    twcc [OPTIONS] <SUBCOMMAND>
+    twcc [FLAGS] [OPTIONS] <SUBCOMMAND>
 
 FLAGS:
     -h, --help       Prints help information
+    -v, --verbose    Level of verbosity
     -V, --version    Prints version information
 
 OPTIONS:
@@ -69,7 +70,9 @@ SUBCOMMANDS:
     blocked-follows    For a given user, list everyone they follow who you block
     check-existence    Checks whether a list of status IDs (from stdin) still exist
     deleted-tweets     Lists Wayback Machine URLs for all deleted tweets by a user
+    follower-report    For a given user, print a report about their followers
     help               Prints this message or the help of the given subcommand(s)
+    import-blocks      Blocks a list of user IDs (from stdin)
     list-blocks        Print a list of all users you've blocked
     list-followers     Print a list of all users who follow you (or someone else)
     list-friends       Print a list of all users you (or someone else) follows
@@ -147,7 +150,6 @@ Most of these things are excluded for one of the following reasons:
 
 I might add some of them eventually.
 
-Nothing here is very polished or robust. These applications don't keep track of rate limits, for
-example, so if you run out of requests for an endpoint, they'll just crash, and
-you'll have to wait. I might try to smooth out some of these rough edges at some
-point, but it's unlikely.
+Nothing here is very polished or robust. These applications don't keep track of rate limits in all
+cases, for example, so if you run out of requests for an endpoint, they may just crash, and you'll
+have to wait. I might try to smooth out some of these rough edges at some point, but it's unlikely.
