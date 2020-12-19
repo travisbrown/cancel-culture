@@ -22,6 +22,7 @@ hyper-tls = "0.4.0"
 image = "0.23.10"
 itertools = "0.9.0"
 lazy_static = "1.4.0"
+libsqlite3-sys = "0.20.1"
 log = "0.4"
 pin-project = "1.0.1"
 quick-error = "2.0.0"
@@ -39,3 +40,6 @@ tokio = { version = "0.2.22", features = ["macros"] }
 tokio-test = "0.2.1"
 toml = "0.5.7"
 url = "2.2.0"
+
+[features]
+bundled-sqlite3 = ["libsqlite3-sys/bundled"]
