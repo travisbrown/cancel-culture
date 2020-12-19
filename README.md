@@ -164,3 +164,7 @@ I might add some of them eventually.
 Nothing here is very polished or robust. These applications don't keep track of rate limits in all
 cases, for example, so if you run out of requests for an endpoint, they may just crash, and you'll
 have to wait. I might try to smooth out some of these rough edges at some point, but it's unlikely.
+
+## License
+
+This project is licensed under the Mozilla Public License, version 2.0. See the LICENSE file for details.
