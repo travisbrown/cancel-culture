@@ -1,5 +1,7 @@
 ## Overview
 
+[![Build status](https://img.shields.io/github/workflow/status/travisbrown/cancel-culture/ci.svg)](https://github.com/travisbrown/cancel-culture/actions)
+
 This repository contains some low-tech tools designed to help you make Twitter a nicer place for
 yourself. Some of these tools might also be useful in other ways, like for
 example if some litigious person with a long history of making common cause with white
