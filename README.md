@@ -46,8 +46,17 @@ https://web.archive.org/web/20190923221242/https://twitter.com/jdegoes/status/11
 https://web.archive.org/web/20200526150339/https://twitter.com/jdegoes/status/1265251872048320513
 ```
 
-(In this case we've limited the search to the 100 tweets most recently archived by the Wayback
-Machine.)
+In this case we've limited the search to the 100 tweets most recently archived by the Wayback
+Machine.
+
+You can also use this command to generate a Markdown-formatted report instead of a simple list of
+links:
+
+```
+$ target/release/twcc deleted-tweets --report ChiefScientist
+```
+
+Which currently generates [this document](https://gist.github.com/travisbrown/9ca0dafe086e4904480b91d5019de96d).
 
 It can also print a list of everyone you currently block, follow, or are followed by, it can get the
 URL of a deleted tweet from the URL of a reply, and it can partition a list of tweet IDs by their
