@@ -22,6 +22,22 @@ pub struct Item {
 impl Item {
     const DATE_FMT: &'static str = "%Y%m%d%H%M%S";
 
+    pub fn new(
+        url: String,
+        archived: NaiveDateTime,
+        digest: String,
+        mimetype: String,
+        status: Option<u16>,
+    ) -> Item {
+        Item {
+            url,
+            archived,
+            digest,
+            mimetype,
+            status,
+        }
+    }
+
     pub fn timestamp(&self) -> String {
         self.archived.format(Item::DATE_FMT).to_string()
     }
@@ -64,13 +80,13 @@ impl Item {
                 .map_err(|_| Error::ItemParsingError(format!("Unexpected status: {}", status)))
         }?;
 
-        Ok(Item {
-            url: url.to_string(),
+        Ok(Item::new(
+            url.to_string(),
             archived,
-            digest: digest.to_string(),
-            mimetype: mimetype.to_string(),
-            status: status_parsed,
-        })
+            digest.to_string(),
+            mimetype.to_string(),
+            status_parsed,
+        ))
     }
 
     fn from_row(row: &[String]) -> Result<Item> {
