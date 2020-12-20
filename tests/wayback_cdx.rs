@@ -1,13 +1,13 @@
-use bytes::Bytes;
 use cancel_culture::wayback::{cdx::Client, Item};
 use chrono::NaiveDate;
-use std::fs;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Error};
 
-const ITEM_QUERY: &str = "twitter.com/travisbrown/status/1323554460765925376";
+const EXAMPLE_ITEM_QUERY: &str = "twitter.com/travisbrown/status/1323554460765925376";
 
-fn item() -> Item {
+fn example_item() -> Item {
     Item::new(
-        format!("https://{}", ITEM_QUERY),
+        format!("https://{}", EXAMPLE_ITEM_QUERY),
         NaiveDate::from_ymd(2020, 11, 3).and_hms(9, 16, 10),
         "BHEPEG22C5COEOQD46QEFH4XK5SLN32A".to_string(),
         "text/html".to_string(),
@@ -15,20 +15,32 @@ fn item() -> Item {
     )
 }
 
+fn example_lines() -> Vec<String> {
+    let file = File::open("examples/html/1323554460765925376.html").unwrap();
+    let reader = BufReader::new(file);
+
+    reader
+        .lines()
+        .collect::<Result<Vec<String>, Error>>()
+        .unwrap()
+}
+
 #[tokio::test]
 async fn test_search() {
     let client = Client::default();
-    let results = client.search(ITEM_QUERY).await.unwrap();
+    let results = client.search(EXAMPLE_ITEM_QUERY).await.unwrap();
 
-    assert_eq!(results[0], item());
+    assert_eq!(results[0], example_item());
 }
 
 #[tokio::test]
 async fn test_download() {
     let client = Client::default();
+    let result = client.download(&example_item(), true).await.unwrap();
+    let result_lines = result
+        .lines()
+        .collect::<Result<Vec<String>, Error>>()
+        .unwrap();
 
-    let result = client.download(&item(), true).await.unwrap();
-    let expected = Bytes::from(fs::read("examples/html/1323554460765925376.html").unwrap());
-
-    assert_eq!(result, expected);
+    assert_eq!(result_lines, example_lines());
 }
