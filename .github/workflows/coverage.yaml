@@ -10,8 +10,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Set up ChromeDriver
-        uses: nanasess/setup-chromedriver@master
+      #- name: Set up ChromeDriver
+      #  uses: nanasess/setup-chromedriver@master
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
@@ -23,7 +23,7 @@ jobs:
         uses: actions-rs/tarpaulin@v0.1
         with:
           version: '0.16.0'
-          args: '--ignored -- --test-threads 1'
+          args: '-- --test-threads 1'
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1.1.0
