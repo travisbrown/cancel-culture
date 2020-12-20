@@ -1,7 +1,7 @@
 use egg_mode::KeyPair;
 use serde_derive::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct Config {
     twitter: TwitterConfig,
 }
@@ -12,7 +12,7 @@ impl Config {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct TwitterConfig {
     consumer_key: String,
@@ -27,5 +27,28 @@ impl TwitterConfig {
             KeyPair::new(self.consumer_key.clone(), self.consumer_secret.clone()),
             KeyPair::new(self.access_token.clone(), self.access_token_secret.clone()),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_twitter_config() {
+        let input =
+            "[twitter]\nconsumerKey=\"ABC\"\nconsumerSecret=\"DEF\"\naccessToken=\"GHI\"\naccessTokenSecret=\"JKL\"";
+
+        let config = toml::from_str::<Config>(&input).unwrap();
+        let expected = Config {
+            twitter: TwitterConfig {
+                consumer_key: "ABC".to_string(),
+                consumer_secret: "DEF".to_string(),
+                access_token: "GHI".to_string(),
+                access_token_secret: "JKL".to_string(),
+            },
+        };
+
+        assert_eq!(config, expected);
     }
 }

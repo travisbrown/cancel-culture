@@ -10,6 +10,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
+      #- name: Set up ChromeDriver
+      #  uses: nanasess/setup-chromedriver@master
+
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
         with:
