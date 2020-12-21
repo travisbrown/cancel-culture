@@ -231,3 +231,25 @@ pub fn extract_status_id(url: &str) -> Option<u64> {
             .and_then(|groups| groups.get(1).and_then(|m| m.as_str().parse::<u64>().ok()))
     })
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_extract_status_id() {
+        let pairs = vec![
+            (
+                "https://twitter.com/martinshkreli/status/446273988780904448?lang=da",
+                Some(446273988780904448),
+            ),
+            (
+                "https://twitter.com/ChiefScientist/status/1270099974559154177",
+                Some(1270099974559154177),
+            ),
+            ("abcdef", None),
+        ];
+
+        for (url, expected) in pairs {
+            assert_eq!(super::extract_status_id(url), expected);
+        }
+    }
+}
