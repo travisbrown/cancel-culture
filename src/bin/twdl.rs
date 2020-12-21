@@ -1,4 +1,7 @@
-use cancel_culture::twitter::{store::Store, Client};
+use cancel_culture::{
+    cli,
+    twitter::{store::Store, Client},
+};
 use clap::{crate_authors, crate_version, Clap};
 use egg_mode::user::TwitterUser;
 use futures::{stream::LocalBoxStream, StreamExt, TryStreamExt};
@@ -9,13 +12,8 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 
 #[tokio::main]
 async fn main() -> Void {
-    let _ = simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        simplelog::Config::default(),
-        simplelog::TerminalMode::Stderr,
-    );
-
     let opts: Opts = Opts::parse();
+    let _ = cli::init_logging(opts.verbose);
     let client = Client::from_config_file(&opts.key_file).await?;
     let store = Store::new(Connection::open(&opts.db_file)?);
 
@@ -90,5 +88,8 @@ struct Opts {
     /// SQLite database file
     #[clap(short, long, default_value = "twitter.db")]
     db_file: String,
+    /// Level of verbosity
+    #[clap(short, long, parse(from_occurrences))]
+    verbose: i32,
     value: Option<String>,
 }

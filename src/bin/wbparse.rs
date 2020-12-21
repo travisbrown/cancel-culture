@@ -1,5 +1,5 @@
 use cancel_culture::browser::twitter::parser::{extract_description, extract_tweets, parse_gz};
-use cancel_culture::wayback::Store;
+use cancel_culture::{cli, wayback::Store};
 use flate2::read::GzDecoder;
 use std::fs::File;
 use std::io::Read;
@@ -9,13 +9,8 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 
 #[tokio::main]
 async fn main() -> Void {
-    let _ = simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        simplelog::Config::default(),
-        simplelog::TerminalMode::Stderr,
-    );
-
     let args: Vec<String> = std::env::args().collect();
+    let _ = cli::init_logging(3);
     let path = Path::new(&args[1]);
     let store = Store::load("wayback")?;
 
