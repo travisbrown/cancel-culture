@@ -167,3 +167,32 @@ pub fn crop_tweet<I: GenericImageView<Pixel = Rgba<u8>>>(
             })
         })
 }
+
+#[cfg(test)]
+mod tests {
+    use image::io::Reader;
+    use image::RgbaImage;
+    use std::path::Path;
+
+    fn load_image<P: AsRef<Path>>(path: P) -> RgbaImage {
+        Reader::open(path).unwrap().decode().unwrap().into_rgba8()
+    }
+
+    #[test]
+    fn crop_tweet() {
+        let examples = vec![
+            (
+                "examples/images/703033780689199104-full.png",
+                Some((252, 108, 1195, 423)),
+            ),
+            (
+                "examples/images/1302424011511529474-full.png",
+                Some((252, 108, 1195, 665)),
+            ),
+        ];
+
+        for (path, expected) in examples {
+            assert_eq!(super::crop_tweet(&load_image(path)), expected);
+        }
+    }
+}
