@@ -8,7 +8,7 @@ use scraper::Html;
 use serde::Deserialize;
 use std::io::Read;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct BrowserTweet {
     pub id: u64,
     pub time: DateTime<Utc>,
@@ -163,13 +163,14 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
 
 #[cfg(test)]
 mod tests {
+    use chrono::{TimeZone, Utc};
     use flate2::read::GzDecoder;
     use scraper::Html;
-    use std::fs::File;
+    use std::fs::{read_to_string, File};
     use std::io::Read;
 
     #[test]
-    fn extract() {
+    fn extract_tweets() {
         let file = File::open("examples/wayback/53SGIJNJMTP6S626CVRCHFTX3OEWXB3E.gz").unwrap();
         let mut gz = GzDecoder::new(file);
         let mut html = String::new();
@@ -183,5 +184,22 @@ mod tests {
             Some(293)
         );
         assert_eq!(super::extract_tweets(&doc).len(), 11);
+    }
+
+    #[test]
+    fn extract_tweets_json() {
+        let contents = read_to_string("examples/json/890659426796945408.json").unwrap();
+        let expected = super::BrowserTweet {
+            id: 890659426796945408,
+            time: Utc.timestamp_millis(1501184729657),
+            user_id: 849768899772133376,
+            user_screen_name: "DrupalLeaks".to_string(),
+            text: "Whose secrets should we cover in Part 2 of our documentary series, \
+                   The Dark Secrets of Drupal? Or perhaps some other #DrupalElite? \
+                   Speak up!"
+                .to_string(),
+        };
+
+        assert_eq!(super::extract_tweets_json(&contents), Some(expected));
     }
 }
