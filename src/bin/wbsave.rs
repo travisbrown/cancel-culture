@@ -1,4 +1,4 @@
-use cancel_culture::wayback;
+use cancel_culture::{cli, wayback};
 use clap::{crate_authors, crate_version, Clap};
 use std::io::BufRead;
 
@@ -6,13 +6,8 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 
 #[tokio::main]
 async fn main() -> Void {
-    let _ = simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        simplelog::Config::default(),
-        simplelog::TerminalMode::Stderr,
-    );
-
     let opts: Opts = Opts::parse();
+    let _ = cli::init_logging(opts.verbose);
 
     let fantoccini_client = cancel_culture::browser::make_client_or_panic(
         &opts.browser,
@@ -51,6 +46,9 @@ struct Opts {
     port: Option<u16>,
     #[clap(short = 'n', long)]
     disable_headless: bool,
+    /// Level of verbosity
+    #[clap(short, long, parse(from_occurrences))]
+    verbose: i32,
     #[clap(short, long, default_value = "chrome")]
     browser: String,
 }

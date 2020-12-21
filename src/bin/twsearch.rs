@@ -1,15 +1,10 @@
-use cancel_culture::browser::make_client_or_panic;
+use cancel_culture::{browser::make_client_or_panic, cli};
 use clap::{crate_authors, crate_version, Clap};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        simplelog::Config::default(),
-        simplelog::TerminalMode::Stderr,
-    );
-
     let opts: Opts = Opts::parse();
+    let _ = cli::init_logging(opts.verbose);
 
     let mut browser = make_client_or_panic(
         &opts.browser,
@@ -50,5 +45,8 @@ struct Opts {
     #[clap(short = 'n', long)]
     disable_headless: bool,
     #[clap(short, long, default_value = "chrome")]
+    /// Level of verbosity
+    #[clap(short, long, parse(from_occurrences))]
+    verbose: i32,
     browser: String,
 }

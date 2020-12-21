@@ -1,4 +1,5 @@
 use cancel_culture::{
+    cli,
     reports::deleted_tweets::DeletedTweetReport,
     twitter::{extract_status_id, Client, Error, Result},
     wayback,
@@ -13,21 +14,7 @@ use std::io::Read;
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
-
-    let log_level = match opts.verbose {
-        0 => simplelog::LevelFilter::Off,
-        1 => simplelog::LevelFilter::Error,
-        2 => simplelog::LevelFilter::Warn,
-        3 => simplelog::LevelFilter::Info,
-        4 => simplelog::LevelFilter::Debug,
-        _ => simplelog::LevelFilter::Trace,
-    };
-
-    let _ = simplelog::TermLogger::init(
-        log_level,
-        simplelog::Config::default(),
-        simplelog::TerminalMode::Stderr,
-    );
+    let _ = cli::init_logging(opts.verbose);
 
     let client = Client::from_config_file(&opts.key_file).await?;
 
