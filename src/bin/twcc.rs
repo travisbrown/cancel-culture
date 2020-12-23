@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
             Ok(())
         }
         SubCommand::ListBlocks(ListBlocks { ids_only }) => {
-            let ids = client.blocks().await?;
+            let ids: Vec<u64> = client.blocks_ids().try_collect::<Vec<_>>().await?;
             if ids_only {
                 for id in ids {
                     println!("{}", id);
@@ -120,7 +120,7 @@ async fn main() -> Result<()> {
             }
         }
         SubCommand::BlockedFollows(BlockedFollows { screen_name }) => {
-            let blocks = client.blocks().await?.into_iter().collect::<HashSet<u64>>();
+            let blocks = client.blocks_ids().try_collect::<HashSet<u64>>().await?;
             let blocked_friends = client
                 .followed_ids(screen_name.clone())
                 .try_collect::<Vec<_>>()
@@ -146,7 +146,7 @@ async fn main() -> Result<()> {
             Ok(())
         }
         SubCommand::FollowerReport(FollowerReport { screen_name }) => {
-            let blocks = client.blocks().await?.into_iter().collect::<HashSet<u64>>();
+            let blocks = client.blocks_ids().try_collect::<HashSet<u64>>().await?;
             let their_followers = client
                 .follower_ids(screen_name.clone())
                 .try_collect::<HashSet<u64>>()
