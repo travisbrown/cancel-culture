@@ -18,9 +18,7 @@ use egg_mode::{
     user::{TwitterUser, UserID},
     KeyPair, Token,
 };
-use futures::{
-    future::try_join_all, stream::LocalBoxStream, FutureExt, TryFutureExt, TryStreamExt,
-};
+use futures::{future::try_join_all, stream::LocalBoxStream, FutureExt, TryFutureExt};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
@@ -88,11 +86,11 @@ impl Client {
             .ok_or_else(|| Error::TweetIDParseError(input.to_string()))
     }
 
-    pub async fn blocks(&self) -> EggModeResult<Vec<u64>> {
-        egg_mode::user::blocks_ids(&self.user_token)
-            .map_ok(|r| r.response)
-            .try_collect()
-            .await
+    pub fn blocks_ids(&self) -> LocalBoxStream<EggModeResult<u64>> {
+        let cursor = egg_mode::user::blocks_ids(&self.user_token);
+
+        self.user_limited_client
+            .make_stream(cursor, Method::USER_BLOCKS_IDS)
     }
 
     pub fn tweets<T: Into<UserID>>(

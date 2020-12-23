@@ -24,6 +24,7 @@ pub enum Method {
 }
 
 impl Method {
+    pub const USER_BLOCKS_IDS: &'static Method = &Method::User(UserMethod::BlocksIds);
     pub const USER_FOLLOWED_IDS: &'static Method = &Method::User(UserMethod::FriendsIds);
     pub const USER_FOLLOWER_IDS: &'static Method = &Method::User(UserMethod::FollowersIds);
     pub const USER_LOOKUP: &'static Method = &Method::User(UserMethod::Lookup);
