@@ -69,6 +69,35 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
+        SubCommand::ListUnmutuals => {
+            let follower_ids: HashSet<u64> = client
+                .follower_ids_self()
+                .try_collect::<HashSet<_>>()
+                .await?;
+            let followed_ids: HashSet<u64> = client
+                .followed_ids_self()
+                .try_collect::<HashSet<_>>()
+                .await?;
+
+            let ids = follower_ids
+                .symmetric_difference(&followed_ids)
+                .cloned()
+                .collect::<Vec<_>>();
+            log::info!("Looking up {} users", ids.len());
+
+            let mut users = client.lookup_users(ids).try_collect::<Vec<_>>().await?;
+            users.sort_by_key(|user| -user.followers_count);
+
+            for user in users {
+                if follower_ids.contains(&user.id) {
+                    print!("<");
+                } else {
+                    print!(">");
+                }
+                println!(" {:16}{:>9}", user.screen_name, user.followers_count);
+            }
+            Ok(())
+        }
         SubCommand::ImportBlocks => {
             let stdin = std::io::stdin();
             let mut buffer = String::new();
@@ -464,7 +493,7 @@ enum SubCommand {
     FollowerReport(FollowerReport),
     #[clap(version = crate_version!(), author = crate_authors!())]
     LookupReply(LookupReply),
-    /// Checks whether a list of status IDs (from stdin) still exist
+    /// Check whether a list of status IDs (from stdin) still exist
     #[clap(version = crate_version!(), author = crate_authors!())]
     CheckExistence,
     #[clap(version = crate_version!(), author = crate_authors!())]
@@ -477,9 +506,12 @@ enum SubCommand {
     ListBlocks(ListBlocks),
     #[clap(version = crate_version!(), author = crate_authors!())]
     ListTweets(ListTweets),
-    /// Blocks a list of user IDs (from stdin)
+    /// Block a list of user IDs (from stdin)
     #[clap(version = crate_version!(), author = crate_authors!())]
     ImportBlocks,
+    /// List everyone you follow or who follows you who is not a mutual
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    ListUnmutuals,
 }
 
 /// Get the URL of a tweet given the URL or status ID of a reply
@@ -500,7 +532,7 @@ struct FollowerReport {
     screen_name: String,
 }
 
-/// Lists Wayback Machine URLs for all deleted tweets by a user
+/// List Wayback Machine URLs for all deleted tweets by a user
 #[derive(Clap)]
 struct DeletedTweets {
     #[clap(short = 'l', long)]
