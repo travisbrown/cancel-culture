@@ -2,7 +2,7 @@ use cancel_culture::browser;
 use fantoccini::Locator;
 use std::collections::HashSet;
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 /// Super-low-tech way to download your block list without a Twitter API account.
 #[tokio::main]
@@ -12,7 +12,7 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
     client.goto(BLOCK_LIST_URL).await?;
 
     // This shouldn't really be necessary, but is for some reason?
-    delay_for(Duration::from_millis(500)).await;
+    sleep(Duration::from_millis(500)).await;
 
     client
         .wait_for(move |c| {
@@ -24,14 +24,14 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
         })
         .await?;
 
-    delay_for(Duration::from_millis(2000)).await;
+    sleep(Duration::from_millis(2000)).await;
 
     let mut account_list = client.wait_for_find(ACCOUNT_LIST_LOC).await?;
     let mut seen = HashSet::new();
     let mut attempts = 0;
 
     while attempts < MAX_ATTEMPTS {
-        delay_for(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(500)).await;
 
         let account_items = account_list.find_all(ACCOUNT_ITEM_LOC).await?;
         let mut added = 0;

@@ -8,7 +8,7 @@ use futures::{
     StreamExt, TryStreamExt,
 };
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 pub fn make_stream(timeline: Timeline, wait: Duration) -> LocalBoxStream<'static, Result<Tweet>> {
     try_unfold(
@@ -18,7 +18,7 @@ pub fn make_stream(timeline: Timeline, wait: Duration) -> LocalBoxStream<'static
                 started = true;
                 timeline.start().await?
             } else {
-                delay_for(wait).await;
+                sleep(wait).await;
                 timeline.newer(None).await?
             };
 

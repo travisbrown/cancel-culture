@@ -2,7 +2,7 @@ use super::Result;
 use fantoccini::{Client as FClient, Locator};
 use futures::{future::LocalBoxFuture, FutureExt};
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 pub struct Client {
     underlying: FClient,
@@ -37,7 +37,7 @@ impl Client {
 
     pub fn save<'a>(&'a mut self, url: &'a str) -> LocalBoxFuture<'a, Result<String>> {
         async move {
-            delay_for(Duration::from_millis(Self::SAVE_WAIT_MILLIS)).await;
+            sleep(Duration::from_millis(Self::SAVE_WAIT_MILLIS)).await;
             self.underlying.goto(Self::SAVE_URL).await?;
 
             self.underlying.wait_for_find(Self::SAVE_FORM_LOC).await?;

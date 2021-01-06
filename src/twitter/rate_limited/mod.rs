@@ -6,7 +6,7 @@ pub use stream::{Pageable, TimelineScrollback};
 use egg_mode::{error::Result, service::rate_limit_status, Token};
 use futures::{stream::LocalBoxStream, StreamExt, TryStreamExt};
 use log::warn;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 pub(crate) struct RateLimitedClient {
     limits: MethodLimitStore,
@@ -40,7 +40,7 @@ impl RateLimitedClient {
                             delay,
                             limit.reset_time()
                         );
-                        delay_for(delay).await;
+                        sleep(delay).await;
                     }
 
                     limit.decrement();
