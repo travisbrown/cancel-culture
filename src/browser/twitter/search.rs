@@ -4,7 +4,7 @@ use fantoccini::{Client, Locator};
 use futures::{future::BoxFuture, FutureExt};
 use regex::Regex;
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 pub struct UserTweetSearch {
     screen_name: String,
@@ -81,12 +81,12 @@ impl Scroller for UserTweetSearch {
     fn init<'a>(&'a self, client: &'a mut Client) -> BoxFuture<'a, Result<bool, Self::Err>> {
         async move {
             client.goto(&self.search_url).await?;
-            delay_for(Duration::from_millis(750)).await;
+            sleep(Duration::from_millis(750)).await;
             log::info!("Checking: {}", self.search_url);
 
             if client.find_all(Self::NO_RESULTS_LOC).await?.is_empty() {
                 if !client.find_all(Self::RATE_LIMIT_LOC).await?.is_empty() {
-                    delay_for(Duration::from_secs(Self::BROWSER_RATE_LIMIT_WAIT_SECONDS)).await;
+                    sleep(Duration::from_secs(Self::BROWSER_RATE_LIMIT_WAIT_SECONDS)).await;
 
                     self.init(client).await
                 } else {

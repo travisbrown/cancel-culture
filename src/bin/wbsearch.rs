@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 use clap::{crate_authors, crate_version, Clap};
 use fantoccini::{Client, Element, Locator};
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 /// Low-tech way to look up URLs on the Wayback Machine! The CDX API is better (when it works).
 #[tokio::main]
@@ -22,7 +22,7 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
     let mut summary = client.wait_for_find(SUMMARY_LOC).await?;
 
     // This shouldn't really be necessary, but is for some reason?
-    delay_for(Duration::from_millis(500)).await;
+    sleep(Duration::from_millis(500)).await;
 
     let expected_count = parse_summary_text(&summary.text().await?.trim_start());
     let mut seen_count = 0;
