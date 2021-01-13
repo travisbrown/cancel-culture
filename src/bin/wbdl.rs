@@ -29,7 +29,7 @@ async fn main() -> Void {
 #[derive(Clap)]
 #[clap(name = "wbdl", version = crate_version!(), author = crate_authors!())]
 struct Opts {
-    /// TOML file containing Twitter API keys
+    /// Wayback Machine store directory
     #[clap(short, long, default_value = "wayback")]
     store_dir: String,
     /// Level of verbosity

@@ -24,7 +24,7 @@ build:rust-latest:
   stage: build
   image: rust:latest
   before_script:    
-    - cargo install cargo-tarpaulin -f
+    - cargo install cargo-tarpaulin
   script:
     - cargo tarpaulin --out Xml
     - bash <(curl -s https://codecov.io/bash)

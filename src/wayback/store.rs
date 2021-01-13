@@ -167,6 +167,72 @@ impl Store {
         })
     }
 
+    pub async fn export<F: Fn(&Item) -> bool, W: Write>(
+        &self,
+        name: &str,
+        out: W,
+        f: F,
+    ) -> Result<()> {
+        let contents = self.contents.read().await;
+        let metadata = contents.file.metadata()?;
+        let mut selected = Vec::with_capacity(contents.by_digest.len());
+
+        for items in contents.by_digest.values() {
+            for item in items {
+                if f(item) {
+                    selected.push(item);
+                }
+            }
+        }
+
+        selected.sort_by_key(|item| &item.url);
+
+        let mut csv = WriterBuilder::new().from_writer(Vec::with_capacity(selected.len()));
+
+        for item in &selected {
+            csv.write_record(&[
+                item.url.to_string(),
+                item.timestamp(),
+                item.digest.to_string(),
+                item.mimetype.to_string(),
+                item.status_code(),
+            ])?;
+        }
+
+        let csv_data = csv.into_inner()?;
+
+        let mut archive = tar::Builder::new(out);
+        let mut csv_header = tar::Header::new_gnu();
+        csv_header.set_metadata_in_mode(&metadata, tar::HeaderMode::Deterministic);
+        csv_header.set_size(csv_data.len() as u64);
+
+        archive.append_data(
+            &mut csv_header,
+            format!("{}/contents.csv", name),
+            &*csv_data,
+        )?;
+
+        for item in selected {
+            let path = self.data_path(&item.digest);
+            let file = File::open(path)?;
+            let mut gz = GzDecoder::new(file);
+            let mut buffer = vec![];
+            gz.read_to_end(&mut buffer)?;
+
+            let mut header = tar::Header::new_gnu();
+            header.set_metadata_in_mode(&metadata, tar::HeaderMode::Deterministic);
+            header.set_size(buffer.len() as u64);
+
+            archive.append_data(
+                &mut header,
+                format!("{}/data/{}", name, item.digest),
+                &*buffer,
+            )?;
+        }
+
+        Ok(())
+    }
+
     fn add_item_by_url(map: &mut HashMap<String, Vec<Item>>, item: Item) {
         match map.get_mut(&item.url) {
             Some(url_items) => {
