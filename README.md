@@ -1,3 +1,13 @@
+Please note that this project is now developed [on GitLab](https://gitlab.com/travisbrown/cancel-culture),
+and will only temporarily be mirrored to [GitHub](https://github.com/travisbrown/cancel-culture).
+[GitLab](https://www.theregister.com/2019/10/17/gitlab_reverse_ferret/) is
+[garbage](https://www.theregister.com/2019/10/16/gitlab_employees_gagged/) but
+for the moment at least
+[GitHub](https://techcrunch.com/2019/11/13/github-faces-more-resignations-in-light-of-ice-contract/)
+[is](https://www.theglobeandmail.com/technology/digital-culture/github-sexism-scandal-is-really-about-techs-fake-meritocracy/article17716723/)
+[even](https://twitter.com/shelbyspees/status/1349070271366369281?s=20)
+[worse](https://twitter.com/businessinsider/status/1349066876324896773).
+
 ## Overview
 
 This repository contains some low-tech tools designed to help you make Twitter a nicer place for
