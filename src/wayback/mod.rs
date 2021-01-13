@@ -8,7 +8,7 @@ pub use store::Store;
 
 use chrono::NaiveDateTime;
 
-type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Item {
