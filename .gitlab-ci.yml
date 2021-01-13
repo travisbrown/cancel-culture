@@ -2,6 +2,12 @@ stages:
   - lint
   - build
 
+cache:
+  key: "$CI_JOB_NAME"
+  untracked: true
+  paths:
+    - target/
+
 lint:rustfmt:
   stage: lint
   image: rust:latest
