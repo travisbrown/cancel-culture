@@ -2,11 +2,15 @@ stages:
   - lint
   - build
 
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+
 cache:
   key: "$CI_JOB_NAME"
   untracked: true
   paths:
     - target/
+    - .cargo/
 
 lint:rustfmt:
   stage: lint
