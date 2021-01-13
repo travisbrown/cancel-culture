@@ -1,0 +1,38 @@
+stages:
+  - lint
+  - build
+
+cache:
+  key: "$CI_JOB_NAME"
+  untracked: true
+  paths:
+    - target/
+
+lint:rustfmt:
+  stage: lint
+  image: rust:latest
+  before_script:
+    - rustup component add rustfmt
+  script:
+    - cargo fmt --all -- --check
+
+build:rust-latest:
+  stage: build
+  image: rust:latest
+  before_script:    
+    - cargo install cargo-tarpaulin -f
+  script:
+    - cargo tarpaulin --out Xml
+    - bash <(curl -s https://codecov.io/bash)
+  coverage: '/^\d+.\d+% coverage/'
+  artifacts:
+    paths:
+      - target/tarpaulin/coverage.json
+
+build:rust-nightly:
+  stage: build
+  image: rustlang/rust:nightly
+  script:
+    - cargo build --verbose
+    - cargo test --verbose
+  allow_failure: true
