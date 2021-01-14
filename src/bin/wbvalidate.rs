@@ -13,7 +13,7 @@ async fn main() -> Void {
 
     if path.is_file() {
         let mut file = File::open(path)?;
-        let hash = Store::digest_gz(&mut file)?;
+        let hash = Store::compute_digest_gz(&mut file)?;
         log::info!("{}", hash);
     } else {
         let contents = std::fs::read_dir(path)?;
@@ -26,7 +26,7 @@ async fn main() -> Void {
 
             if path.is_file() {
                 let mut file = File::open(&path)?;
-                let hash = Store::digest_gz(&mut file)?;
+                let hash = Store::compute_digest_gz(&mut file)?;
                 let stem = path
                     .file_stem()
                     .and_then(|oss| oss.to_str())
