@@ -41,26 +41,3 @@ async fn save_tgz(store: &Store, name: &str, query: &str) -> Result<()> {
 
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use cancel_culture::wayback::Store;
-    use flate2::{write::GzEncoder, Compression};
-
-    #[tokio::test]
-    async fn test_export() {
-        let store = Store::load("examples/wayback/store/").unwrap();
-        let mut buffer = vec![];
-        let encoder = GzEncoder::new(&mut buffer, Compression::default());
-        store
-            .export("store-export-test", encoder, |item| {
-                item.url.contains("twitter.com/ChiefScientist")
-            })
-            .await
-            .unwrap();
-
-        let expected = std::fs::read("examples/wayback/store-export-test.tgz").unwrap();
-
-        assert_eq!(buffer, expected);
-    }
-}

@@ -83,7 +83,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn digest<R: Read>(input: &mut R) -> Result<String> {
+    pub fn compute_digest<R: Read>(input: &mut R) -> Result<String> {
         let mut sha1 = Sha1::new();
 
         std::io::copy(input, &mut sha1)?;
@@ -95,8 +95,8 @@ impl Store {
         Ok(output)
     }
 
-    pub fn digest_gz<R: Read>(input: &mut R) -> Result<String> {
-        Store::digest(&mut GzDecoder::new(input))
+    pub fn compute_digest_gz<R: Read>(input: &mut R) -> Result<String> {
+        Store::compute_digest(&mut GzDecoder::new(input))
     }
 
     fn data_path(&self, digest: &str) -> PathBuf {
@@ -261,5 +261,122 @@ impl Store {
 
     fn contents_path<P: AsRef<Path>>(base_dir: &P) -> PathBuf {
         base_dir.as_ref().join(Store::CONTENTS_FILE_NAME)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{super::Item, Store};
+    use bytes::Bytes;
+    use chrono::NaiveDate;
+    use flate2::{write::GzEncoder, Compression};
+    use std::fs::File;
+
+    fn example_item() -> Item {
+        Item::new(
+            "https://twitter.com/jdegoes/status/1169217405425455105".to_string(),
+            NaiveDate::from_ymd(2019, 9, 16).and_hms(23, 32, 35),
+            "AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O".to_string(),
+            "text/html".to_string(),
+            Some(200),
+        )
+    }
+
+    fn new_example_item() -> Item {
+        Item::new(
+            "https://twitter.com/jdegoes/status/1194638178482700291".to_string(),
+            NaiveDate::from_ymd(2019, 11, 13).and_hms(17, 6, 29),
+            "ZHYT52YPEOCHJD5FZINSDYXGQZI22WJ4".to_string(),
+            "text/html".to_string(),
+            Some(200),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_store_compute_digest() {
+        let mut file = File::open("examples/wayback/ZHYT52YPEOCHJD5FZINSDYXGQZI22WJ4").unwrap();
+        let result = Store::compute_digest(&mut file).unwrap();
+
+        assert_eq!(result, "ZHYT52YPEOCHJD5FZINSDYXGQZI22WJ4");
+    }
+
+    #[tokio::test]
+    async fn test_store_compute_digest_gz() {
+        let mut file = File::open("examples/wayback/53SGIJNJMTP6S626CVRCHFTX3OEWXB3E.gz").unwrap();
+        let result = Store::compute_digest_gz(&mut file).unwrap();
+
+        assert_eq!(result, "53SGIJNJMTP6S626CVRCHFTX3OEWXB3E");
+    }
+
+    #[tokio::test]
+    async fn test_store_items_by_digest() {
+        let store = Store::load("examples/wayback/store/").unwrap();
+        let result = store
+            .items_by_digest("AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O")
+            .await;
+
+        assert_eq!(result, vec![example_item()]);
+    }
+
+    #[tokio::test]
+    async fn test_store_contains() {
+        let store = Store::load("examples/wayback/store/").unwrap();
+
+        assert!(store.contains(&example_item()).await);
+    }
+
+    #[tokio::test]
+    async fn test_store_add() {
+        use fs_extra::dir;
+
+        let store_dir = tempfile::tempdir().unwrap();
+        println!("{:?}", store_dir.path());
+        fs_extra::copy_items(
+            &vec![
+                "examples/wayback/store/contents.csv",
+                "examples/wayback/store/data/",
+            ],
+            store_dir.path(),
+            &dir::CopyOptions::new(),
+        )
+        .unwrap();
+
+        let store = Store::load(store_dir.path()).unwrap();
+        let new_item_bytes =
+            std::fs::read("examples/wayback/ZHYT52YPEOCHJD5FZINSDYXGQZI22WJ4").unwrap();
+
+        store
+            .add(&new_example_item(), Bytes::from(new_item_bytes))
+            .await
+            .unwrap();
+
+        let new_result = store
+            .items_by_digest("ZHYT52YPEOCHJD5FZINSDYXGQZI22WJ4")
+            .await;
+
+        assert_eq!(new_result, vec![new_example_item()]);
+
+        let old_result = store
+            .items_by_digest("AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O")
+            .await;
+
+        assert_eq!(old_result, vec![example_item()]);
+    }
+
+    #[tokio::test]
+    async fn test_store_export() {
+        let store = Store::load("examples/wayback/store/").unwrap();
+        let mut buffer = vec![];
+        let encoder = GzEncoder::new(&mut buffer, Compression::default());
+        store
+            .export("store-export-test", encoder, |item| {
+                item.url.contains("twitter.com/ChiefScientist")
+            })
+            .await
+            .unwrap();
+
+        let expected = std::fs::read("examples/wayback/store-export-test.tgz").unwrap();
+
+        assert_eq!(buffer, expected);
     }
 }
