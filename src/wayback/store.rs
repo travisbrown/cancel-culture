@@ -18,6 +18,24 @@ struct Contents {
     file: File,
 }
 
+impl Contents {
+    pub fn filter<F: Fn(&Item) -> bool>(&self, f: F) -> Vec<&Item> {
+        let mut selected = Vec::with_capacity(self.by_digest.len());
+
+        for items in self.by_digest.values() {
+            for item in items {
+                if f(item) {
+                    selected.push(item);
+                }
+            }
+        }
+
+        selected.sort_by_key(|item| item.url.to_string());
+
+        selected
+    }
+}
+
 pub struct Store {
     base_dir: PathBuf,
     contents: RwLock<Contents>,
@@ -174,18 +192,7 @@ impl Store {
         f: F,
     ) -> Result<()> {
         let contents = self.contents.read().await;
-        let metadata = contents.file.metadata()?;
-        let mut selected = Vec::with_capacity(contents.by_digest.len());
-
-        for items in contents.by_digest.values() {
-            for item in items {
-                if f(item) {
-                    selected.push(item);
-                }
-            }
-        }
-
-        selected.sort_by_key(|item| &item.url);
+        let selected = contents.filter(f);
 
         let mut csv = WriterBuilder::new().from_writer(Vec::with_capacity(selected.len()));
 
@@ -199,6 +206,7 @@ impl Store {
             ])?;
         }
 
+        let metadata = contents.file.metadata()?;
         let csv_data = csv.into_inner()?;
 
         let mut archive = tar::Builder::new(out);
