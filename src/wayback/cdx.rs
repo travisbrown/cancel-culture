@@ -9,7 +9,7 @@ pub struct Client {
 }
 
 impl Client {
-    const CDX_BASE: &'static str = "https://web.archive.org/cdx/search/cdx";
+    const CDX_BASE: &'static str = "http://web.archive.org/cdx/search/cdx";
     const CDX_OPTIONS: &'static str =
         "&output=json&fl=original,timestamp,digest,mimetype,statuscode";
 
