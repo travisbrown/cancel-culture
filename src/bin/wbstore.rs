@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
 }
 
 #[derive(Clap)]
-#[clap(name = "wbdl", version = crate_version!(), author = crate_authors!())]
+#[clap(name = "wbstore", version = crate_version!(), author = crate_authors!())]
 struct Opts {
     /// Wayback Machine store directory
     #[clap(short, long, default_value = "wayback")]
