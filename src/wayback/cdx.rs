@@ -3,6 +3,7 @@ use bytes::Bytes;
 use futures::{Future, FutureExt, StreamExt, TryStreamExt};
 use log::info;
 use reqwest::Client as RClient;
+use std::time::Duration;
 
 pub struct Client {
     underlying: RClient,
@@ -15,7 +16,10 @@ impl Client {
 
     pub fn new() -> Client {
         Client {
-            underlying: RClient::new(),
+            underlying: RClient::builder()
+                .tcp_keepalive(Some(Duration::from_secs(20)))
+                .build()
+                .unwrap(),
         }
     }
 
