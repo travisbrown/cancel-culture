@@ -1,13 +1,11 @@
 use cancel_culture::{
     cli,
-    wayback::{cdx::Client, Store},
+    wayback::{cdx::Client, Result, Store},
 };
 use clap::{crate_authors, crate_version, Clap};
 
-type Void = Result<(), Box<dyn std::error::Error>>;
-
 #[tokio::main]
-async fn main() -> Void {
+async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
     let _ = cli::init_logging(opts.verbose);
 
@@ -21,9 +19,16 @@ async fn main() -> Void {
 
     items.reverse();
 
-    log::info!("{} items to download", items.len());
-
     let store = Store::load(opts.store_dir)?;
+    let missing = store.count_missing(&items).await;
+
+    log::info!(
+        "Downloading {} of {} items for \"{}\"",
+        missing,
+        items.len(),
+        opts.query
+    );
+
     client.save_all(&store, &items, opts.parallelism).await?;
 
     Ok(())

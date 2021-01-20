@@ -55,6 +55,21 @@ impl Store {
         }
     }
 
+    pub async fn count_missing(&self, items: &[Item]) -> usize {
+        let contents = self.contents.read().await;
+
+        items
+            .iter()
+            .filter(|item| {
+                if let Some(items) = contents.by_url.get(&item.url) {
+                    !items.contains(item)
+                } else {
+                    true
+                }
+            })
+            .count()
+    }
+
     pub async fn items_by_digest(&self, digest: &str) -> Vec<Item> {
         self.contents
             .read()
@@ -316,6 +331,16 @@ mod tests {
         )
     }
 
+    fn fake_item(url: &str) -> Item {
+        Item::new(
+            url.to_string(),
+            NaiveDate::from_ymd(2021, 1, 1).and_hms(12, 0, 0),
+            "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ".to_string(),
+            "text/html".to_string(),
+            Some(200),
+        )
+    }
+
     #[tokio::test]
     async fn test_store_compute_digest() {
         let mut file = File::open("examples/wayback/ZHYT52YPEOCHJD5FZINSDYXGQZI22WJ4").unwrap();
@@ -347,6 +372,19 @@ mod tests {
         let store = Store::load("examples/wayback/store/").unwrap();
 
         assert!(store.contains(&example_item()).await);
+    }
+
+    #[tokio::test]
+    async fn test_store_count_missing() {
+        let store = Store::load("examples/wayback/store/").unwrap();
+        let items = vec![
+            fake_item("foo"),
+            example_item(),
+            fake_item("bar"),
+            fake_item("qux"),
+        ];
+
+        assert_eq!(store.count_missing(&items).await, 3);
     }
 
     #[tokio::test]
