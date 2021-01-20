@@ -5,6 +5,7 @@ use std::fmt::{Debug, Display, Formatter};
 pub enum Error {
     ClientError(reqwest::Error),
     ItemParsingError(String),
+    ItemDecodingError(serde_json::Error),
     FileIOError(std::io::Error),
     StoreContentsDecodingError(csv::Error),
     StoreContentsEncodingError(Box<csv::IntoInnerError<csv::Writer<Vec<u8>>>>),
@@ -22,6 +23,12 @@ impl std::error::Error for Error {}
 impl From<reqwest::Error> for Error {
     fn from(e: reqwest::Error) -> Self {
         Error::ClientError(e)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(e: serde_json::Error) -> Self {
+        Error::ItemDecodingError(e)
     }
 }
 

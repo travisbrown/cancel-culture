@@ -3,6 +3,7 @@ use bytes::Bytes;
 use futures::{Future, FutureExt, StreamExt, TryStreamExt};
 use log::info;
 use reqwest::Client as RClient;
+use std::io::{BufReader, Read};
 use std::time::Duration;
 
 pub struct Client {
@@ -23,6 +24,21 @@ impl Client {
         }
     }
 
+    fn decode_rows(rows: Vec<Vec<String>>) -> Result<Vec<Item>> {
+        rows.into_iter()
+            .skip(1)
+            .map(|row| Item::from_row(&row))
+            .collect()
+    }
+
+    pub fn load_json<R: Read>(reader: R) -> Result<Vec<Item>> {
+        let buffered = BufReader::new(reader);
+
+        let rows = serde_json::from_reader::<BufReader<R>, Vec<Vec<String>>>(buffered)?;
+
+        Self::decode_rows(rows)
+    }
+
     pub async fn search(&self, query: &str) -> Result<Vec<Item>> {
         let query_url = format!("{}?url={}{}", Client::CDX_BASE, query, Client::CDX_OPTIONS);
         let rows = self
@@ -33,10 +49,7 @@ impl Client {
             .json::<Vec<Vec<String>>>()
             .await?;
 
-        rows.into_iter()
-            .skip(1)
-            .map(|row| Item::from_row(&row))
-            .collect()
+        Self::decode_rows(rows)
     }
 
     pub async fn download(&self, item: &Item, original: bool) -> Result<Bytes> {
@@ -76,5 +89,19 @@ impl Client {
 impl Default for Client {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Client;
+    use std::fs::File;
+
+    #[test]
+    fn test_client_decode_rows() {
+        let file = File::open("examples/wayback/cdx-result.json").unwrap();
+        let result = Client::load_json(file).unwrap();
+
+        assert_eq!(result.len(), 37);
     }
 }
