@@ -12,12 +12,15 @@ async fn main() -> Void {
     let _ = cli::init_logging(opts.verbose);
 
     let client = Client::new();
-    let items = client
+    let mut items = client
         .search(&opts.query)
         .await?
         .into_iter()
         .filter(|item| item.url.len() < 80)
         .collect::<Vec<_>>();
+
+    items.reverse();
+
     log::info!("{} items to download", items.len());
 
     let store = Store::load(opts.store_dir)?;
