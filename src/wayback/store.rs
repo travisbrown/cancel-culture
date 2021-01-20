@@ -117,6 +117,17 @@ impl Store {
         Store::compute_digest(&mut GzDecoder::new(input))
     }
 
+    pub fn compute_item_digest(&self, digest: &str) -> Result<Option<String>> {
+        let path = self.data_path(digest);
+
+        if path.is_file() {
+            let mut file = File::open(path)?;
+            Store::compute_digest_gz(&mut file).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
     fn data_path(&self, digest: &str) -> PathBuf {
         self.data_dir().join(format!("{}.gz", digest))
     }
@@ -183,6 +194,11 @@ impl Store {
                 file,
             }),
         })
+    }
+
+    pub async fn filter<F: Fn(&Item) -> bool>(&self, f: F) -> Vec<Item> {
+        let contents = self.contents.read().await;
+        contents.filter(f).into_iter().cloned().collect()
     }
 
     pub async fn export<F: Fn(&Item) -> bool, W: Write>(
