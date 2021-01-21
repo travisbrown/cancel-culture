@@ -59,7 +59,7 @@ struct Opts {
     #[clap(short, long, parse(from_occurrences))]
     verbose: i32,
     /// Number of records to save in parallel
-    #[clap(short, long, default_value = "4")]
+    #[clap(short, long, default_value = "6")]
     parallelism: usize,
     /// Optional JSON file of CDX results
     #[clap(short, long)]
