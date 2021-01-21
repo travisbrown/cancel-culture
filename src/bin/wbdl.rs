@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
         }
         None => {
             client
-                .search(&opts.query.clone().unwrap_or("".to_string()))
+                .search(&opts.query.clone().unwrap_or_else(|| "".to_string()))
                 .await?
         }
     };
@@ -39,7 +39,9 @@ async fn main() -> Result<()> {
         "Downloading {} of {} items for \"{}\"",
         missing,
         items.len(),
-        opts.query.or(opts.input_json).unwrap_or("".to_string())
+        opts.query
+            .or(opts.input_json)
+            .unwrap_or_else(|| "".to_string())
     );
 
     client.save_all(&store, &items, opts.parallelism).await?;
