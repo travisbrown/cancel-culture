@@ -73,7 +73,9 @@ impl Client {
             .map(Ok)
             .try_for_each_concurrent(limit, move |item| {
                 info!("Downloading {}", item.url);
-                self.download(item, true)
+                tryhard::retry_fn(move || self.download(item, true))
+                    .retries(5)
+                    .exponential_backoff(Duration::from_millis(250))
                     .then(move |bytes_result| match bytes_result {
                         Ok(bytes) => store.add(item, bytes).boxed_local(),
                         Err(_) => async move {
