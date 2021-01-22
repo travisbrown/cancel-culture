@@ -21,6 +21,7 @@ fs_extra = "1.2.0"
 futures = "0.3.7"
 futures-locks = "0.6.0"
 futures-util = "0.3.6"
+html5ever = "0.25"
 hyper = { version = "0.14", features = [ "stream" ] }
 hyper-tls = "0.5"
 image = "0.23.10"

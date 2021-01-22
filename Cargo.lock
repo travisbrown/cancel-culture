@@ -176,6 +176,7 @@ dependencies = [
  "futures",
  "futures-locks",
  "futures-util",
+ "html5ever",
  "hyper",
  "hyper-tls",
  "image",

@@ -1,5 +1,7 @@
 use chrono::{DateTime, TimeZone, Utc};
 use flate2::read::GzDecoder;
+use html5ever::driver::{self, ParseOpts};
+use html5ever::tendril::TendrilSink;
 use lazy_static::lazy_static;
 use scraper::element_ref::ElementRef;
 use scraper::node::Node;
@@ -12,7 +14,7 @@ use std::io::Read;
 pub struct BrowserTweet {
     pub id: u64,
     pub time: DateTime<Utc>,
-    user_id: u64,
+    pub user_id: u64,
     pub user_screen_name: String,
     pub text: String,
 }
@@ -61,21 +63,16 @@ lazy_static! {
         Selector::parse("meta[property='og:description']").unwrap();
 }
 
-pub fn parse<R: Read>(input: &mut R) -> Result<Html, std::io::Error> {
-    let mut html = String::new();
+pub fn parse_html<R: Read>(input: &mut R) -> Result<Html, std::io::Error> {
+    let parser = driver::parse_document(Html::new_document(), ParseOpts::default()).from_utf8();
 
-    input.read_to_string(&mut html)?;
-
-    Ok(Html::parse_document(&html))
+    parser.read_from(input)
 }
 
-pub fn parse_gz<R: Read>(input: &mut R) -> Result<Html, std::io::Error> {
+pub fn parse_html_gz<R: Read>(input: &mut R) -> Result<Html, std::io::Error> {
     let mut gz = GzDecoder::new(input);
-    let mut html = String::new();
 
-    gz.read_to_string(&mut html)?;
-
-    Ok(Html::parse_document(&html))
+    parse_html(&mut gz)
 }
 
 pub fn extract_description(doc: &Html) -> Option<String> {
@@ -92,7 +89,7 @@ pub fn extract_tweets(doc: &Html) -> Vec<BrowserTweet> {
         .collect()
 }
 
-pub fn extract_tweets_json(content: &str) -> Option<BrowserTweet> {
+pub fn extract_tweet_json(content: &str) -> Option<BrowserTweet> {
     let t: serde_json::Result<TweetJson> = serde_json::from_str(content);
     t.ok().map(|v| v.into_browser_tweet())
 }
@@ -200,6 +197,6 @@ mod tests {
                 .to_string(),
         };
 
-        assert_eq!(super::extract_tweets_json(&contents), Some(expected));
+        assert_eq!(super::extract_tweet_json(&contents), Some(expected));
     }
 }
