@@ -381,7 +381,7 @@ async fn main() -> Result<()> {
 
                         if tweets.is_empty() {
                             if let Some(tweet) =
-                                cancel_culture::browser::twitter::parser::extract_tweets_json(
+                                cancel_culture::browser::twitter::parser::extract_tweet_json(
                                     &content,
                                 )
                             {

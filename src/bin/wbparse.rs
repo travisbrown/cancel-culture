@@ -1,4 +1,6 @@
-use cancel_culture::browser::twitter::parser::{extract_description, extract_tweets, parse_gz};
+use cancel_culture::browser::twitter::parser::{
+    extract_description, extract_tweets, parse_html_gz,
+};
 use cancel_culture::{cli, wayback::Store};
 use flate2::read::GzDecoder;
 use std::fs::File;
@@ -34,7 +36,7 @@ async fn main() -> Void {
                 let digest = Store::extract_digest(&path).unwrap();
                 let mut file = File::open(&path)?;
 
-                let html = parse_gz(&mut file)?;
+                let html = parse_html_gz(&mut file)?;
 
                 let description = extract_description(&html).is_some();
                 let tweets = extract_tweets(&html);

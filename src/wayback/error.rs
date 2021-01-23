@@ -1,5 +1,6 @@
 use fantoccini::error::CmdError;
 use std::fmt::{Debug, Display, Formatter};
+use tokio::task::JoinError;
 
 #[derive(Debug)]
 pub enum Error {
@@ -10,6 +11,7 @@ pub enum Error {
     StoreContentsDecodingError(csv::Error),
     StoreContentsEncodingError(Box<csv::IntoInnerError<csv::Writer<Vec<u8>>>>),
     BrowserError(CmdError),
+    TaskError(JoinError),
 }
 
 impl Display for Error {
@@ -53,5 +55,11 @@ impl From<csv::IntoInnerError<csv::Writer<Vec<u8>>>> for Error {
 impl From<CmdError> for Error {
     fn from(e: CmdError) -> Self {
         Error::BrowserError(e)
+    }
+}
+
+impl From<JoinError> for Error {
+    fn from(e: JoinError) -> Self {
+        Error::TaskError(e)
     }
 }
