@@ -74,7 +74,7 @@ impl Client {
             .try_for_each_concurrent(limit, move |item| {
                 info!("Downloading {}", item.url);
                 tryhard::retry_fn(move || self.download(item, true))
-                    .retries(5)
+                    .retries(7)
                     .exponential_backoff(Duration::from_millis(250))
                     .then(move |bytes_result| match bytes_result {
                         Ok(bytes) => store.add(item, bytes).boxed_local(),
