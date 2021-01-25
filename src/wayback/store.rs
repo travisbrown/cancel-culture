@@ -8,7 +8,7 @@ use data_encoding::BASE32;
 use flate2::read::GzDecoder;
 use flate2::{Compression, GzBuilder};
 use futures::{Stream, StreamExt, TryStreamExt};
-use futures_locks::RwLock;
+use futures_locks::{Mutex, RwLock};
 use itertools::Itertools;
 use sha1::{Digest, Sha1};
 use std::collections::HashMap;
@@ -218,6 +218,50 @@ impl Store {
     pub async fn filter<F: Fn(&Item) -> bool>(&self, f: F) -> Vec<Item> {
         let contents = self.contents.read().await;
         contents.filter(f).into_iter().cloned().collect()
+    }
+
+    pub async fn invalid_digest_items<F: Fn(&Item) -> bool>(
+        &self,
+        f: F,
+        limit: usize,
+    ) -> Result<Vec<(Item, bool)>> {
+        let contents = self.contents.read().await;
+        let result = Mutex::new(vec![]);
+        let selected = contents.filter(f);
+
+        futures::stream::iter(selected.into_iter().cloned())
+            .map(Ok)
+            .try_for_each_concurrent(limit, |item| {
+                let expected = item.digest.clone();
+                let mutex = result.clone();
+
+                let path = self.data_path(&item.digest);
+
+                tokio::spawn(async move {
+                    if path.is_file() {
+                        if let Ok(mut file) = File::open(path) {
+                            if let Ok(actual) = Store::compute_digest_gz(&mut file) {
+                                if actual != expected {
+                                    let mut res = mutex.lock().await;
+                                    res.push((item, false));
+                                }
+                            } else {
+                                let mut res = mutex.lock().await;
+                                res.push((item, true));
+                            }
+                        } else {
+                            let mut res = mutex.lock().await;
+                            res.push((item, true));
+                        }
+                    } else {
+                        let mut res = mutex.lock().await;
+                        res.push((item, true));
+                    }
+                })
+            })
+            .await?;
+
+        Ok(result.lock().await.clone())
     }
 
     pub async fn export<F: Fn(&Item) -> bool, W: Write>(
@@ -438,6 +482,17 @@ mod tests {
         )
     }
 
+    // This is an actual example of a Wayback item with an invalid digest.
+    fn real_invalid_item() -> Item {
+        Item::new(
+            "https://twitter.com/jdegoes/status/1305518012984897536".to_string(),
+            NaiveDate::from_ymd(2020, 9, 14).and_hms(15, 36, 27),
+            "5DECQVIU7Y3F276SIBAKKCRGDMVXJYFV".to_string(),
+            "text/html".to_string(),
+            Some(200),
+        )
+    }
+
     #[tokio::test]
     async fn test_store_compute_digest() {
         let mut file = File::open("examples/wayback/ZHYT52YPEOCHJD5FZINSDYXGQZI22WJ4").unwrap();
@@ -486,17 +541,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_store_add() {
-        use fs_extra::dir;
-
         let store_dir = tempfile::tempdir().unwrap();
-        println!("{:?}", store_dir.path());
         fs_extra::copy_items(
             &vec![
                 "examples/wayback/store/contents.csv",
                 "examples/wayback/store/data/",
             ],
             store_dir.path(),
-            &dir::CopyOptions::new(),
+            &fs_extra::dir::CopyOptions::new(),
         )
         .unwrap();
 
@@ -582,5 +634,39 @@ mod tests {
         .collect();
 
         assert_eq!(tweet_store.get_known_digests().await.unwrap(), expected);
+    }
+
+    #[tokio::test]
+    async fn test_store_invalid_digest_items() {
+        let store_dir = tempfile::tempdir().unwrap();
+        fs_extra::copy_items(
+            &vec![
+                "examples/wayback/store/contents.csv",
+                "examples/wayback/store/data/",
+            ],
+            store_dir.path(),
+            &fs_extra::dir::CopyOptions::new(),
+        )
+        .unwrap();
+
+        let store = Store::load(store_dir.path()).unwrap();
+        let new_item_bytes = Bytes::from(
+            std::fs::read("examples/wayback/ZHYT52YPEOCHJD5FZINSDYXGQZI22WJ4").unwrap(),
+        );
+
+        store
+            .add(&new_example_item(), new_item_bytes.clone())
+            .await
+            .unwrap();
+
+        store.add(&fake_item("foo"), new_item_bytes).await.unwrap();
+
+        let mut result = store.invalid_digest_items(|_| true, 2).await.unwrap();
+        result.sort_by_key(|(item, _)| item.url.clone());
+
+        assert_eq!(
+            result,
+            vec![(fake_item("foo"), false), (real_invalid_item(), false)]
+        );
     }
 }
