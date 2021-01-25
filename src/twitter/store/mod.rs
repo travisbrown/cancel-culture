@@ -1,3 +1,4 @@
+pub mod wayback;
 mod wrappers;
 
 use chrono::{DateTime, Utc};

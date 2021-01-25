@@ -1,3 +1,4 @@
+use crate::twitter::store::wayback;
 use fantoccini::error::CmdError;
 use std::fmt::{Debug, Display, Formatter};
 use tokio::task::JoinError;
@@ -12,6 +13,7 @@ pub enum Error {
     StoreContentsEncodingError(Box<csv::IntoInnerError<csv::Writer<Vec<u8>>>>),
     BrowserError(CmdError),
     TaskError(JoinError),
+    TweetStoreError(wayback::TweetStoreError),
 }
 
 impl Display for Error {
@@ -61,5 +63,11 @@ impl From<CmdError> for Error {
 impl From<JoinError> for Error {
     fn from(e: JoinError) -> Self {
         Error::TaskError(e)
+    }
+}
+
+impl From<wayback::TweetStoreError> for Error {
+    fn from(e: wayback::TweetStoreError) -> Self {
+        Error::TweetStoreError(e)
     }
 }

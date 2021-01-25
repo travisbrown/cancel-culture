@@ -53,13 +53,13 @@ impl Client {
     }
 
     pub async fn download(&self, item: &Item, original: bool) -> Result<Bytes> {
-        let item_url = format!(
-            "http://web.archive.org/web/{}{}/{}",
-            item.timestamp(),
-            if original { "id_" } else { "if_" },
-            item.url
-        );
-        Ok(self.underlying.get(&item_url).send().await?.bytes().await?)
+        Ok(self
+            .underlying
+            .get(&item.wayback_url(original))
+            .send()
+            .await?
+            .bytes()
+            .await?)
     }
 
     pub fn save_all<'a>(
@@ -74,7 +74,7 @@ impl Client {
             .try_for_each_concurrent(limit, move |item| {
                 info!("Downloading {}", item.url);
                 tryhard::retry_fn(move || self.download(item, true))
-                    .retries(5)
+                    .retries(7)
                     .exponential_backoff(Duration::from_millis(250))
                     .then(move |bytes_result| match bytes_result {
                         Ok(bytes) => store.add(item, bytes).boxed_local(),

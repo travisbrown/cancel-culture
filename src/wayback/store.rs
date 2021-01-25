@@ -1,6 +1,7 @@
 use super::{Item, Result};
 
 use crate::browser::twitter::parser::{self, BrowserTweet};
+use crate::twitter::store::wayback::TweetStore;
 use bytes::Bytes;
 use csv::{ReaderBuilder, WriterBuilder};
 use data_encoding::BASE32;
@@ -8,6 +9,7 @@ use flate2::read::GzDecoder;
 use flate2::{Compression, GzBuilder};
 use futures::{Stream, StreamExt, TryStreamExt};
 use futures_locks::RwLock;
+use itertools::Itertools;
 use sha1::{Digest, Sha1};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
@@ -274,11 +276,10 @@ impl Store {
         Ok(())
     }
 
-    fn extract_tweets_from_path<P: AsRef<Path>>(
-        path: P,
-        mimetype: &str,
-    ) -> Result<Vec<BrowserTweet>> {
-        if path.as_ref().is_file() {
+    fn extract_tweets_from_path<P: AsRef<Path>>(p: P, mimetype: &str) -> Result<Vec<BrowserTweet>> {
+        let path = p.as_ref();
+
+        if path.is_file() {
             let mut file = File::open(path)?;
 
             if mimetype == "application/json" {
@@ -291,32 +292,38 @@ impl Store {
                     None => vec![],
                 })
             } else {
-                let doc = parser::parse_html_gz(&mut file)?;
-                Ok(parser::extract_tweets(&doc))
+                match parser::parse_html_gz(&mut file) {
+                    Ok(doc) => Ok(parser::extract_tweets(&doc)),
+                    Err(err) => {
+                        log::error!("Failed reading {:?}: {:?}", path, err);
+                        Ok(vec![])
+                    }
+                }
             }
         } else {
             Ok(vec![])
         }
     }
 
-    pub fn extract_all_tweets_stream<'a, I: IntoIterator<Item = Item> + 'a>(
+    pub fn extract_tweets_stream<'a, I: IntoIterator<Item = Item> + 'a>(
         &'a self,
         items: I,
         limit: usize,
-    ) -> impl Stream<Item = Result<Vec<BrowserTweet>>> + 'a {
-        futures::stream::iter(items)
+    ) -> impl Stream<Item = Result<(Item, Vec<BrowserTweet>)>> + 'a {
+        futures::stream::iter(items.into_iter().unique_by(|item| item.digest.clone()))
             .map(move |item| {
                 let path = self.data_path(&item.digest);
 
                 Ok(tokio::spawn(async move {
                     Self::extract_tweets_from_path(path, &item.mimetype)
+                        .map(|tweets| (item, tweets))
                 }))
             })
             .try_buffer_unordered(limit)
             .map(|res| res.map_err(From::from).and_then(|inner| inner))
     }
 
-    pub async fn extract_all_tweets<F: Fn(&Item) -> bool>(
+    pub async fn extract_tweets<F: Fn(&Item) -> bool>(
         &self,
         f: F,
         limit: usize,
@@ -324,15 +331,40 @@ impl Store {
         let contents = self.contents.read().await;
         let selected = contents.filter(f).into_iter().cloned();
 
-        self.extract_all_tweets_stream(selected, limit)
+        self.extract_tweets_stream(selected, limit)
             .try_fold(HashMap::new(), |mut acc, tweets| async {
-                for tweet in tweets {
+                for tweet in tweets.1 {
                     let entry = acc.entry(tweet.id).or_insert_with(|| Vec::with_capacity(1));
                     entry.push(tweet);
                 }
                 Ok(acc)
             })
             .await
+    }
+
+    pub async fn export_tweets(&self, tweet_store: &TweetStore) -> Result<()> {
+        let known_digests = tweet_store.get_known_digests().await?;
+        let items = self
+            .filter(move |item| !known_digests.contains(&item.digest))
+            .await;
+
+        self.extract_tweets_stream(items, 4)
+            .try_for_each(|(item, tweets)| {
+                let tweet_store = tweet_store.clone();
+                async move {
+                    if let Err(err) = tweet_store.add_tweets(&tweets, &item).await {
+                        log::error!(
+                            "Error saving tweet {:?}: {:?}",
+                            tweets.get(0).map(|t| t.id),
+                            err
+                        );
+                    }
+                    Ok(())
+                }
+            })
+            .await?;
+
+        Ok(())
     }
 
     fn add_item_by_url(map: &mut HashMap<String, Vec<Item>>, item: Item) {
@@ -369,10 +401,12 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::{super::Item, Store};
+    use crate::twitter::store::wayback::TweetStore;
     use bytes::Bytes;
     use chrono::NaiveDate;
     use flate2::{write::GzEncoder, Compression};
     use std::fs::File;
+    use tempfile::NamedTempFile;
 
     fn example_item() -> Item {
         Item::new(
@@ -506,10 +540,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_store_extract_all_tweets() {
+    async fn test_store_extract_tweets() {
         let store = Store::load("examples/wayback/store/").unwrap();
         let tweets = store
-            .extract_all_tweets(|item| item.url.contains("twitter.com/ChiefScientist"), 8)
+            .extract_tweets(|item| item.url.contains("twitter.com/ChiefScientist"), 8)
             .await
             .unwrap();
 
@@ -526,5 +560,27 @@ mod tests {
                 .map(|tweets| tweets.iter().map(|tweet| tweet.user_id).collect()),
             Some(vec![258032124])
         );
+    }
+
+    #[tokio::test]
+    async fn test_store_export_tweets() {
+        let store = Store::load("examples/wayback/store/").unwrap();
+        let tempfile = NamedTempFile::new().unwrap();
+        let tweet_store = TweetStore::new(tempfile.path(), true).unwrap();
+
+        store.export_tweets(&tweet_store).await.unwrap();
+
+        let expected = vec![
+            "2G3EOT7X6IEQZXKSM3OJJDW6RBCHB7YE",
+            "3KQVYC56SMX4LL6QGQEZZGXMOVNZR2XX",
+            "5DECQVIU7Y3F276SIBAKKCRGDMVXJYFV",
+            "AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O",
+            "Y2A3M6COP2G6SKSM4BOHC2MHYS3UW22V",
+        ]
+        .into_iter()
+        .map(|digest| digest.to_string())
+        .collect();
+
+        assert_eq!(tweet_store.get_known_digests().await.unwrap(), expected);
     }
 }
