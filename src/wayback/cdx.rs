@@ -53,13 +53,13 @@ impl Client {
     }
 
     pub async fn download(&self, item: &Item, original: bool) -> Result<Bytes> {
-        let item_url = format!(
-            "http://web.archive.org/web/{}{}/{}",
-            item.timestamp(),
-            if original { "id_" } else { "if_" },
-            item.url
-        );
-        Ok(self.underlying.get(&item_url).send().await?.bytes().await?)
+        Ok(self
+            .underlying
+            .get(&item.wayback_url(original))
+            .send()
+            .await?
+            .bytes()
+            .await?)
     }
 
     pub fn save_all<'a>(
