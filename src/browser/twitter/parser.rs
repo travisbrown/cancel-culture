@@ -7,10 +7,10 @@ use scraper::element_ref::ElementRef;
 use scraper::node::Node;
 use scraper::selector::Selector;
 use scraper::Html;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::io::Read;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Serialize)]
 pub struct BrowserTweet {
     pub id: u64,
     pub time: DateTime<Utc>,

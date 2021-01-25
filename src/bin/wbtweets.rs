@@ -1,30 +1,17 @@
-use cancel_culture::{
-    cli,
-    wayback::{Result, Store},
-};
+use cancel_culture::{cli, twitter::store::wayback::TweetStore, wayback::Store};
 use clap::{crate_authors, crate_version, Clap};
 
+type Void = Result<(), Box<dyn std::error::Error>>;
+
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Void {
     let opts: Opts = Opts::parse();
     let _ = cli::init_logging(opts.verbose);
 
     let store = Store::load(opts.store_dir)?;
-    let query = opts.query;
-    let tweets = store
-        .extract_all_tweets(move |item| item.url.contains(&query), 8)
-        .await?;
+    let tweet_store = TweetStore::new(opts.db, opts.clean)?;
 
-    let mut result = tweets.into_iter().collect::<Vec<_>>();
-    result.sort_by_key(|(id, tweet)| (tweet[0].user_screen_name.clone(), *id));
-
-    for (_, tweets) in result {
-        for tweet in tweets {
-            println!("{} {}", tweet.id, tweet.user_screen_name);
-        }
-    }
-
-    Ok(())
+    Ok(store.export_tweets(&tweet_store).await?)
 }
 
 #[derive(Clap)]
@@ -33,8 +20,13 @@ struct Opts {
     /// Wayback Machine store directory
     #[clap(short, long, default_value = "wayback")]
     store_dir: String,
+    /// Wayback Machine tweet store database file
+    #[clap(short, long, default_value = "wb-tweets.db")]
+    db: String,
+    /// Reset database
+    #[clap(long)]
+    clean: bool,
     /// Level of verbosity
     #[clap(short, long, parse(from_occurrences))]
     verbose: i32,
-    query: String,
 }
