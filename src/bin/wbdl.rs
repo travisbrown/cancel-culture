@@ -3,7 +3,6 @@ use cancel_culture::{
     wayback::{cdx::Client, Result, Store},
 };
 use clap::{crate_authors, crate_version, Clap};
-use std::fs::File;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -12,16 +11,22 @@ async fn main() -> Result<()> {
 
     let client = Client::new();
 
-    let raw_items = match &opts.input_json {
-        Some(input_json_path) => {
-            let file = File::open(input_json_path)?;
+    let raw_items = match opts.command {
+        SubCommand::Query(CdxQuery { query }) => client.search(&query).await?,
+        SubCommand::Batch => {
+            let input = cli::read_stdin()?;
+            let mut result = vec![];
 
-            Client::load_json(file)?
+            for query in input.lines() {
+                result.extend(client.search(&query).await?);
+            }
+
+            result
         }
-        None => {
-            client
-                .search(&opts.query.clone().unwrap_or_else(|| "".to_string()))
-                .await?
+        SubCommand::FromJson => {
+            let doc = cli::read_stdin()?;
+
+            Client::load_json(doc.as_bytes())?
         }
     };
 
@@ -35,14 +40,7 @@ async fn main() -> Result<()> {
     let store = Store::load(opts.store_dir)?;
     let missing = store.count_missing(&items).await;
 
-    log::info!(
-        "Downloading {} of {} items for \"{}\"",
-        missing,
-        items.len(),
-        opts.query
-            .or(opts.input_json)
-            .unwrap_or_else(|| "".to_string())
-    );
+    log::info!("Downloading {} of {} items", missing, items.len());
 
     client.save_all(&store, &items, opts.parallelism).await?;
 
@@ -61,8 +59,24 @@ struct Opts {
     /// Number of records to save in parallel
     #[clap(short, long, default_value = "6")]
     parallelism: usize,
-    /// Optional JSON file of CDX results
-    #[clap(short, long)]
-    input_json: Option<String>,
-    query: Option<String>,
+    #[clap(subcommand)]
+    command: SubCommand,
+}
+
+#[derive(Clap)]
+enum SubCommand {
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    Query(CdxQuery),
+    /// Perform a search for a batch of queries from stdin
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    Batch,
+    /// Download items given CDX search results
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    FromJson,
+}
+
+/// Perform a search for a single query
+#[derive(Clap)]
+struct CdxQuery {
+    query: String,
 }
