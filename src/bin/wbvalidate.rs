@@ -17,7 +17,7 @@ async fn main() -> Void {
     let _ = cli::init_logging(opts.verbose);
 
     let store = Store::load(opts.store_dir)?;
-    let query = opts.query;
+    let query = opts.query.unwrap_or_else(|| "".to_string());
     let mut bad_count = 0usize;
     let mut missing_count = 0usize;
     let mut bad_items = vec![];
@@ -85,5 +85,5 @@ struct Opts {
     /// Level of verbosity
     #[clap(short, long, parse(from_occurrences))]
     verbose: i32,
-    query: String,
+    query: Option<String>,
 }
