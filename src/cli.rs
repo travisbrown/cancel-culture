@@ -1,4 +1,5 @@
 use simplelog::LevelFilter;
+use std::io::Read;
 
 fn select_log_level_filter(verbosity: i32) -> LevelFilter {
     match verbosity {
@@ -17,4 +18,12 @@ pub fn init_logging(verbosity: i32) -> Result<(), log::SetLoggerError> {
         simplelog::Config::default(),
         simplelog::TerminalMode::Stderr,
     )
+}
+
+pub fn read_stdin() -> Result<String, std::io::Error> {
+    let stdin = std::io::stdin();
+    let mut buffer = String::new();
+    let mut handle = stdin.lock();
+    handle.read_to_string(&mut buffer)?;
+    Ok(buffer)
 }
