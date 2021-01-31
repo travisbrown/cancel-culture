@@ -12,7 +12,7 @@ use futures_locks::{Mutex, RwLock};
 use itertools::Itertools;
 use sha1::{Digest, Sha1};
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -149,6 +149,13 @@ impl Store {
 
     fn data_path(&self, digest: &str) -> PathBuf {
         self.data_dir().join(format!("{}.gz", digest))
+    }
+
+    pub fn data_paths(&self) -> Box<dyn Iterator<Item = std::io::Result<PathBuf>>> {
+        match fs::read_dir(self.data_dir()) {
+            Ok(entries) => Box::new(entries.map(|entry| entry.map(|v| v.path()))),
+            Err(error) => Box::new(std::iter::once(Err(error))),
+        }
     }
 
     pub fn read(&self, digest: &str) -> Result<Option<String>> {
@@ -450,6 +457,7 @@ mod tests {
     use chrono::NaiveDate;
     use flate2::{write::GzEncoder, Compression};
     use std::fs::File;
+    use std::path::PathBuf;
     use tempfile::NamedTempFile;
 
     fn example_item() -> Item {
@@ -589,6 +597,25 @@ mod tests {
         let expected = std::fs::read("examples/wayback/store-export-test.tgz").unwrap();
 
         assert_eq!(buffer, expected);
+    }
+
+    #[tokio::test]
+    async fn test_store_data_paths() {
+        let store = Store::load("examples/wayback/store/").unwrap();
+        let result = store
+            .data_paths()
+            .collect::<std::io::Result<Vec<PathBuf>>>()
+            .unwrap();
+
+        let expected: Vec<PathBuf> = vec![
+            PathBuf::from("examples/wayback/store/data/AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O.gz"),
+            PathBuf::from("examples/wayback/store/data/5DECQVIU7Y3F276SIBAKKCRGDMVXJYFV.gz"),
+            PathBuf::from("examples/wayback/store/data/Y2A3M6COP2G6SKSM4BOHC2MHYS3UW22V.gz"),
+            PathBuf::from("examples/wayback/store/data/2G3EOT7X6IEQZXKSM3OJJDW6RBCHB7YE.gz"),
+            PathBuf::from("examples/wayback/store/data/3KQVYC56SMX4LL6QGQEZZGXMOVNZR2XX.gz")
+        ];
+
+        assert_eq!(result, expected);
     }
 
     #[tokio::test]
