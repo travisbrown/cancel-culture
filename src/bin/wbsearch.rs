@@ -1,7 +1,7 @@
 use cancel_culture::browser;
 use chrono::NaiveDate;
 use clap::{crate_authors, crate_version, Clap};
-use fantoccini::{Client, Element, Locator};
+use fantoccini::{elements::Element, Client, Locator};
 use std::time::Duration;
 use tokio::time::sleep;
 

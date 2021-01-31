@@ -12,7 +12,7 @@ use futures_locks::{Mutex, RwLock};
 use itertools::Itertools;
 use sha1::{Digest, Sha1};
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -151,6 +151,13 @@ impl Store {
         self.data_dir().join(format!("{}.gz", digest))
     }
 
+    pub fn data_paths(&self) -> Box<dyn Iterator<Item = std::io::Result<PathBuf>>> {
+        match fs::read_dir(self.data_dir()) {
+            Ok(entries) => Box::new(entries.map(|entry| entry.map(|v| v.path()))),
+            Err(error) => Box::new(std::iter::once(Err(error))),
+        }
+    }
+
     pub fn read(&self, digest: &str) -> Result<Option<String>> {
         let path = self.data_path(digest);
 
@@ -262,6 +269,77 @@ impl Store {
             .await?;
 
         Ok(result.lock().await.clone())
+    }
+
+    /// Compute digests for all data files (ignoring the index and logging issues)
+    pub async fn compute_all_digests(&self, parallelism: usize) -> Vec<(String, String)> {
+        let paths = self.data_paths();
+        let actions = paths //: dyn Iterator<Item = Box<impl Future<Output = (String, Result<String>)>>> = paths
+            .filter_map(|maybe_path| match maybe_path {
+                Err(err) => {
+                    log::error!("Data path error: {:?}", err);
+                    None
+                }
+                Ok(path) => {
+                    // For error log messages
+                    if let Some(path_string) = path
+                        .file_stem()
+                        .and_then(|oss| oss.to_str().map(|s| s.to_string()))
+                    {
+                        if path.is_file() {
+                            match File::open(path) {
+                                Ok(mut f) => Some(tokio::spawn(async move {
+                                    (path_string, Store::compute_digest_gz(&mut f))
+                                })),
+                                Err(error) => {
+                                    log::error!(
+                                        "I/O error opening data file {}: {:?}",
+                                        path_string,
+                                        error
+                                    );
+                                    None
+                                }
+                            }
+                        } else {
+                            log::error!("Data item is not a file: {}", path_string);
+                            None
+                        }
+                    } else {
+                        log::error!("Data item file path error: {:?}", path);
+                        None
+                    }
+                }
+            });
+
+        let mut result: Vec<(String, String)> = futures::stream::iter(actions)
+            .buffer_unordered(parallelism)
+            .filter_map(|handle| async {
+                match handle {
+                    Ok((path_string, result)) => match result {
+                        Ok(digest) => {
+                            log::info!("{}", path_string);
+                            Some((path_string, digest))
+                        }
+                        Err(error) => {
+                            log::error!(
+                                "Error computing digest for gz file {}: {:?}",
+                                path_string,
+                                error
+                            );
+                            None
+                        }
+                    },
+                    Err(error) => {
+                        log::error!("Error in digest computation task: {:?}", error);
+                        None
+                    }
+                }
+            })
+            .collect()
+            .await;
+
+        result.sort_by_key(|(digest, _)| digest.clone());
+        result
     }
 
     pub async fn export<F: Fn(&Item) -> bool, W: Write>(
@@ -450,6 +528,7 @@ mod tests {
     use chrono::NaiveDate;
     use flate2::{write::GzEncoder, Compression};
     use std::fs::File;
+    use std::path::PathBuf;
     use tempfile::NamedTempFile;
 
     fn example_item() -> Item {
@@ -592,6 +671,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_store_data_paths() {
+        let store = Store::load("examples/wayback/store/").unwrap();
+        let mut result = store
+            .data_paths()
+            .collect::<std::io::Result<Vec<PathBuf>>>()
+            .unwrap();
+
+        result.sort_by_key(|path| path.to_string_lossy().to_owned().to_string());
+
+        let expected: Vec<PathBuf> = vec![
+            PathBuf::from("examples/wayback/store/data/2G3EOT7X6IEQZXKSM3OJJDW6RBCHB7YE.gz"),
+            PathBuf::from("examples/wayback/store/data/3KQVYC56SMX4LL6QGQEZZGXMOVNZR2XX.gz"),
+            PathBuf::from("examples/wayback/store/data/5DECQVIU7Y3F276SIBAKKCRGDMVXJYFV.gz"),
+            PathBuf::from("examples/wayback/store/data/AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O.gz"),
+            PathBuf::from("examples/wayback/store/data/Y2A3M6COP2G6SKSM4BOHC2MHYS3UW22V.gz"),
+        ];
+
+        assert_eq!(result, expected);
+    }
+
+    #[tokio::test]
     async fn test_store_extract_tweets() {
         let store = Store::load("examples/wayback/store/").unwrap();
         let tweets = store
@@ -668,5 +768,35 @@ mod tests {
             result,
             vec![(fake_item("foo"), false), (real_invalid_item(), false)]
         );
+    }
+
+    #[tokio::test]
+    async fn test_store_compute_all_digests() {
+        let store = Store::load("examples/wayback/store/").unwrap();
+        let result = store.compute_all_digests(4).await;
+        let expected = vec![
+            (
+                "2G3EOT7X6IEQZXKSM3OJJDW6RBCHB7YE".to_string(),
+                "2G3EOT7X6IEQZXKSM3OJJDW6RBCHB7YE".to_string(),
+            ),
+            (
+                "3KQVYC56SMX4LL6QGQEZZGXMOVNZR2XX".to_string(),
+                "3KQVYC56SMX4LL6QGQEZZGXMOVNZR2XX".to_string(),
+            ),
+            (
+                "5DECQVIU7Y3F276SIBAKKCRGDMVXJYFV".to_string(),
+                "5BPR3OBK6O7KJ6PKFNJRNUICXWNZ46QG".to_string(),
+            ),
+            (
+                "AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O".to_string(),
+                "AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O".to_string(),
+            ),
+            (
+                "Y2A3M6COP2G6SKSM4BOHC2MHYS3UW22V".to_string(),
+                "Y2A3M6COP2G6SKSM4BOHC2MHYS3UW22V".to_string(),
+            ),
+        ];
+
+        assert_eq!(result, expected);
     }
 }

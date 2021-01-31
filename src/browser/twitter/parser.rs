@@ -19,6 +19,40 @@ pub struct BrowserTweet {
     pub text: String,
 }
 
+impl BrowserTweet {
+    pub fn new(
+        id: u64,
+        time: DateTime<Utc>,
+        user_id: u64,
+        user_screen_name: String,
+        text: String,
+    ) -> BrowserTweet {
+        BrowserTweet {
+            id,
+            time,
+            user_id,
+            user_screen_name,
+            text,
+        }
+    }
+
+    fn new_with_timestamp(
+        id: u64,
+        timestamp: i64,
+        user_id: u64,
+        user_screen_name: String,
+        text: String,
+    ) -> BrowserTweet {
+        Self::new(
+            id,
+            Utc.timestamp_millis(timestamp),
+            user_id,
+            user_screen_name,
+            text,
+        )
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct TweetUserJson {
     id: u64,
@@ -41,17 +75,15 @@ struct TweetJson {
 
 impl TweetJson {
     fn into_browser_tweet(self) -> BrowserTweet {
-        BrowserTweet {
-            id: self.id,
-            time: Utc.timestamp_millis(
-                self.timestamp_ms
-                    .parse::<i64>()
-                    .expect("Invalid timestamp_ms value"),
-            ),
-            user_id: self.user.id,
-            user_screen_name: self.user.screen_name,
-            text: self.extended_tweet.map_or(self.text, |et| et.full_text),
-        }
+        BrowserTweet::new_with_timestamp(
+            self.id,
+            self.timestamp_ms
+                .parse::<i64>()
+                .expect("Invalid timestamp_ms value"),
+            self.user.id,
+            self.user.screen_name,
+            self.extended_tweet.map_or(self.text, |et| et.full_text),
+        )
     }
 }
 
