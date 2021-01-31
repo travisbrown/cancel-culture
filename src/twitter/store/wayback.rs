@@ -8,7 +8,7 @@ use std::path::Path;
 use thiserror::Error;
 
 const DIGEST_SELECT: &str = "SELECT DISTINCT value FROM digest";
-const DIGEST_INSERT: &str = "INSERT INTO digest (tweet_id, value, url) VALUES (?, ?, ?)";
+const DIGEST_INSERT: &str = "INSERT OR IGNORE INTO digest (tweet_id, value, url) VALUES (?, ?, ?)";
 
 const TWEET_INSERT: &str =
     "INSERT INTO tweet (twitter_id, ts, user_id, user_screen_name, content) VALUES (?, ?, ?, ?, ?)";
