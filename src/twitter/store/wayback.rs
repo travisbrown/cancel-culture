@@ -23,6 +23,13 @@ const TWEET_SELECT: &str = "
         LIMIT 1
 ";
 
+const TWEET_SELECT_WITH_DIGEST: &str = "
+    SELECT twitter_id, ts, user_id, user_screen_name, content, value
+        FROM tweet
+        JOIN digest ON digest.tweet_id = tweet.id
+        WHERE twitter_id = ?;
+";
+
 type TweetStoreResult<T> = Result<T, TweetStoreError>;
 
 #[derive(Error, Debug)]
@@ -73,6 +80,27 @@ impl TweetStore {
             .query_map(NO_PARAMS, |row| row.get(0))?
             .collect::<Result<HashSet<String>, rusqlite::Error>>()?;
         Ok(row)
+    }
+
+    pub async fn lookup_tweet(&self, id: u64) -> TweetStoreResult<Vec<(BrowserTweet, String)>> {
+        let connection = self.connection.read().await;
+        let mut select = connection.prepare(TWEET_SELECT_WITH_DIGEST)?;
+        let rows = select
+            .query_map(params![SQLiteId(id)], move |row| {
+                let id = row.get::<usize, i64>(0)? as u64;
+                let time: SQLiteDateTime = row.get(1)?;
+                let user_id = row.get::<usize, i64>(2)? as u64;
+                let user_screen_name = row.get(3)?;
+                let content = row.get(4)?;
+                let digest = row.get(5)?;
+                Ok((
+                    BrowserTweet::new(id, time.0, user_id, user_screen_name, content),
+                    digest,
+                ))
+            })?
+            .collect::<Result<Vec<_>, rusqlite::Error>>()?;
+
+        Ok(rows)
     }
 
     pub async fn add_tweets(&self, tweets: &[BrowserTweet], item: &Item) -> TweetStoreResult<()> {
