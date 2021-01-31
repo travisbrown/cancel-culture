@@ -612,7 +612,7 @@ mod tests {
             PathBuf::from("examples/wayback/store/data/5DECQVIU7Y3F276SIBAKKCRGDMVXJYFV.gz"),
             PathBuf::from("examples/wayback/store/data/Y2A3M6COP2G6SKSM4BOHC2MHYS3UW22V.gz"),
             PathBuf::from("examples/wayback/store/data/2G3EOT7X6IEQZXKSM3OJJDW6RBCHB7YE.gz"),
-            PathBuf::from("examples/wayback/store/data/3KQVYC56SMX4LL6QGQEZZGXMOVNZR2XX.gz")
+            PathBuf::from("examples/wayback/store/data/3KQVYC56SMX4LL6QGQEZZGXMOVNZR2XX.gz"),
         ];
 
         assert_eq!(result, expected);
