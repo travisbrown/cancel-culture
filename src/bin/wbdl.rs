@@ -32,7 +32,11 @@ async fn main() -> Result<()> {
 
     let mut items = raw_items
         .into_iter()
-        .filter(|item| item.url.len() < 80)
+        .filter(|item| {
+            item.url.len() < 80
+                && item.digest != "6ALZFKKMVFADY2U6KXV5DEOLI2PVWFX4" // This is a generic suspension page
+                && item.digest != "3I42H3S6NNFQ2MSVX7XZKYAYSCX5QBYJ" // Another problem page
+        })
         .collect::<Vec<_>>();
 
     items.reverse();
