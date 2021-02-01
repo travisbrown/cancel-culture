@@ -147,6 +147,13 @@ impl Store {
         }
     }
 
+    pub fn check_item_digest(&self, digest: &str) -> bool {
+        match self.compute_item_digest(digest) {
+            Ok(Some(actual)) => digest == actual,
+            _ => false,
+        }
+    }
+
     fn data_path(&self, digest: &str) -> PathBuf {
         self.data_dir().join(format!("{}.gz", digest))
     }
@@ -592,6 +599,18 @@ mod tests {
         let result = Store::compute_digest_gz(&mut file).unwrap();
 
         assert_eq!(result, "53SGIJNJMTP6S626CVRCHFTX3OEWXB3E");
+    }
+
+    #[tokio::test]
+    async fn test_store_check_item_digest() {
+        let store = Store::load("examples/wayback/store/").unwrap();
+
+        assert!(store.check_item_digest("2G3EOT7X6IEQZXKSM3OJJDW6RBCHB7YE"));
+        assert!(store.check_item_digest("3KQVYC56SMX4LL6QGQEZZGXMOVNZR2XX"));
+        assert!(store.check_item_digest("AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O"));
+        assert!(store.check_item_digest("Y2A3M6COP2G6SKSM4BOHC2MHYS3UW22V"));
+        assert!(!store.check_item_digest("5DECQVIU7Y3F276SIBAKKCRGDMVXJYFV"));
+        assert!(!store.check_item_digest("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"));
     }
 
     #[tokio::test]
