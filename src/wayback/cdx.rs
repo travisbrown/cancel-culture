@@ -66,24 +66,31 @@ impl Client {
         &'a self,
         store: &'a Store,
         items: &'a [Item],
+        check_duplicate: bool,
         limit: usize,
     ) -> impl Future<Output = Result<()>> + 'a {
         futures::stream::iter(items)
             .filter(move |item| store.contains(&item).map(|v| !v))
             .map(Ok)
             .try_for_each_concurrent(limit, move |item| {
-                info!("Downloading {}", item.url);
-                tryhard::retry_fn(move || self.download(item, true))
-                    .retries(7)
-                    .exponential_backoff(Duration::from_millis(250))
-                    .then(move |bytes_result| match bytes_result {
-                        Ok(bytes) => store.add(item, bytes).boxed_local(),
-                        Err(_) => async move {
-                            log::warn!("Unable to download {}", item.url);
-                            Ok(())
-                        }
-                        .boxed_local(),
-                    })
+                if !check_duplicate || !store.check_item_digest(&item.digest) {
+                    info!("Downloading {}", item.url);
+                    tryhard::retry_fn(move || self.download(item, true))
+                        .retries(7)
+                        .exponential_backoff(Duration::from_millis(250))
+                        .then(move |bytes_result| match bytes_result {
+                            Ok(bytes) => store.add(item, bytes).boxed_local(),
+                            Err(_) => async move {
+                                log::warn!("Unable to download {}", item.url);
+                                Ok(())
+                            }
+                            .boxed_local(),
+                        })
+                        .boxed_local()
+                } else {
+                    info!("Skipping {}", item.url);
+                    async { Ok(()) }.boxed_local()
+                }
             })
     }
 }

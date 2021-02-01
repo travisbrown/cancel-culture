@@ -354,7 +354,7 @@ async fn main() -> Result<()> {
                 }
 
                 log::info!("Saving {} items to store", items.len());
-                wayback_client.save_all(s, &items, 4).await?;
+                wayback_client.save_all(s, &items, true, 4).await?;
             }
 
             for (id, _) in deleted {
