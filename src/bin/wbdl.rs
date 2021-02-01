@@ -46,7 +46,9 @@ async fn main() -> Result<()> {
 
     log::info!("Downloading {} of {} items", missing, items.len());
 
-    client.save_all(&store, &items, opts.parallelism).await?;
+    client
+        .save_all(&store, &items, true, opts.parallelism)
+        .await?;
 
     Ok(())
 }
