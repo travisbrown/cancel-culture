@@ -14,7 +14,7 @@ chrono = "0.4.15"
 clap = "3.0.0-beta.2"
 csv="1.1.4"
 data-encoding = "2.3.0"
-egg-mode = { git = "https://github.com/travisbrown/egg-mode", branch = "update/tokio-1.0" }
+egg-mode = { git = "https://github.com/egg-mode-rs/egg-mode", rev = "6b81073eba9c3b123ca0e80bdb5ef61d1758f131" }
 fantoccini = { version = "0.17", features = [ "rustls-tls" ] }
 flate2 = "1.0"
 fs_extra = "1.2.0"
@@ -53,3 +53,63 @@ url = "2.2.0"
 
 [features]
 bundled-sqlite3 = ["libsqlite3-sys/bundled"]
+
+[[bin]]
+name = "twblocks"
+test = false
+bench = false
+
+[[bin]]
+name = "twcc"
+test = false
+bench = false
+
+[[bin]]
+name = "twdl"
+test = false
+bench = false
+
+[[bin]]
+name = "twsearch"
+test = false
+bench = false
+
+[[bin]]
+name = "twshoot"
+test = false
+bench = false
+
+[[bin]]
+name = "wbdl"
+test = false
+bench = false
+
+[[bin]]
+name = "wbparse"
+test = false
+bench = false
+
+[[bin]]
+name = "wbsave"
+test = false
+bench = false
+
+[[bin]]
+name = "wbsearch"
+test = false
+bench = false
+
+[[bin]]
+name = "wbstore"
+test = false
+bench = false
+
+[[bin]]
+name = "wbtweets"
+test = false
+bench = false
+
+[[bin]]
+name = "wbvalidate"
+test = false
+bench = false
