@@ -398,7 +398,8 @@ async fn main() -> Result<()> {
                         }
 
                         for tweet in tweets {
-                            if tweet.user_screen_name == *screen_name {
+                            if tweet.user_screen_name.to_lowercase() == *screen_name.to_lowercase()
+                            {
                                 match report_items.get(&tweet.id) {
                                     Some((saved_tweet, _)) => {
                                         if saved_tweet.text.len() < tweet.text.len() {
