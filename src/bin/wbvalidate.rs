@@ -25,7 +25,7 @@ async fn main() -> Void {
     let invalid_digest_items = store
         .invalid_digest_items(
             |item| {
-                item.url.contains(&query)
+                item.url.to_lowercase().contains(&query.to_lowercase())
                     && item.status != Some(302)
                     && item.digest != "3I42H3S6NNFQ2MSVX7XZKYAYSCX5QBYJ"
             },
