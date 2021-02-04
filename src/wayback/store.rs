@@ -536,6 +536,65 @@ impl Store {
     fn contents_path<P: AsRef<Path>>(base_dir: &P) -> PathBuf {
         base_dir.as_ref().join(Store::CONTENTS_FILE_NAME)
     }
+
+    /// Return a list of paths from the incoming directory that should be excluded
+    pub fn merge_data<P: AsRef<Path>>(base_dir: &P, incoming_dir: &P) -> Result<Vec<PathBuf>> {
+        let base_contents = Self::dir_contents_map(base_dir)?;
+        let incoming_contents = Self::dir_contents_map(incoming_dir)?;
+        let mut incoming_digests = incoming_contents.into_iter().collect::<Vec<_>>();
+        incoming_digests.sort_by_key(|p| p.0.clone());
+
+        let mut result = vec![];
+
+        for (digest, (path, size)) in incoming_digests {
+            // We only ever consider excluding a path if there's a collision
+            if let Some((base_path, base_size)) = base_contents.get(&digest) {
+                let mut f = File::open(path.clone())?;
+                let mut base_f = File::open(base_path)?;
+                if !file_diff::diff_files(&mut f, &mut base_f) {
+                    let mut gf = File::open(path.clone())?;
+                    let mut base_gf = File::open(base_path)?;
+                    let base_actual = Store::compute_digest_gz(&mut base_gf)?;
+
+                    if base_actual != digest {
+                        let actual = Store::compute_digest_gz(&mut gf)?;
+
+                        if actual != digest {
+                            // If neither digest is correct, we always exclude the incoming one if it is smaller
+                            if size < *base_size {
+                                result.push(path);
+                            }
+                        }
+                    } else {
+                        // If the original file has the proper hash, we always exclude the incoming one
+                        result.push(path);
+                    }
+                } else {
+                    // If the files are the same we exclude the incoming one
+                    result.push(path);
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
+    fn dir_contents_map<P: AsRef<Path>>(path: P) -> Result<HashMap<String, (PathBuf, u64)>> {
+        std::fs::read_dir(path)?
+            .map(|res| {
+                res.map_err(From::from).and_then(|entry| {
+                    let p = entry.path();
+                    let size = entry.metadata()?.len();
+                    let digest = p
+                        .file_stem()
+                        .and_then(|oss| oss.to_str())
+                        .ok_or_else(|| super::Error::DataPathError(p.clone()))?;
+
+                    Ok((digest.to_string(), (p, size)))
+                })
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
