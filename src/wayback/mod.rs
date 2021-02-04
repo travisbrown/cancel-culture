@@ -98,6 +98,22 @@ impl Item {
         ))
     }
 
+    fn parse_optional(
+        url: Option<&str>,
+        timestamp: Option<&str>,
+        digest: Option<&str>,
+        mimetype: Option<&str>,
+        status: Option<&str>,
+    ) -> Result<Item> {
+        Self::parse(
+            url.ok_or_else(|| Error::ItemParsingError("Missing URL".to_string()))?,
+            timestamp.ok_or_else(|| Error::ItemParsingError("Missing timestamp".to_string()))?,
+            digest.ok_or_else(|| Error::ItemParsingError("Missing digest".to_string()))?,
+            mimetype.ok_or_else(|| Error::ItemParsingError("Missing mimetype".to_string()))?,
+            status.ok_or_else(|| Error::ItemParsingError("Missing status".to_string()))?,
+        )
+    }
+
     fn from_row(row: &[String]) -> Result<Item> {
         if row.len() != 5 {
             Err(Error::ItemParsingError(format!(
