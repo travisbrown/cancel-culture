@@ -286,60 +286,70 @@ impl Store {
 
     /// Compute digests for all data files (ignoring the index and logging issues)
     pub async fn compute_all_digests(&self, parallelism: usize) -> Vec<(String, String)> {
+        let mut result: Vec<(String, String)> = self
+            .compute_all_digests_stream(parallelism)
+            .filter_map(|result| async { result.ok() })
+            .collect()
+            .await;
+
+        result.sort_by_key(|(digest, _)| digest.clone());
+        result
+    }
+
+    pub fn compute_all_digests_stream(
+        &self,
+        parallelism: usize,
+    ) -> impl Stream<Item = std::result::Result<(String, String), String>> {
         let paths = self.data_paths();
-        let actions = paths //: dyn Iterator<Item = Box<impl Future<Output = (String, Result<String>)>>> = paths
-            .filter_map(|maybe_path| match maybe_path {
-                Err(err) => {
-                    log::error!("Data path error: {:?}", err);
-                    None
-                }
-                Ok(path) => {
-                    // For error log messages
-                    if let Some(path_string) = path
-                        .file_stem()
-                        .and_then(|oss| oss.to_str().map(|s| s.to_string()))
-                    {
-                        if path.is_file() {
-                            match File::open(path) {
-                                Ok(mut f) => Some(tokio::spawn(async move {
-                                    (path_string, Store::compute_digest_gz(&mut f))
-                                })),
-                                Err(error) => {
-                                    log::error!(
-                                        "I/O error opening data file {}: {:?}",
-                                        path_string,
-                                        error
-                                    );
-                                    None
-                                }
+        let actions = paths.filter_map(|maybe_path| match maybe_path {
+            Err(err) => {
+                log::error!("Data path error: {:?}", err);
+                None
+            }
+            Ok(path) => {
+                // For error log messages
+                if let Some(path_string) = path
+                    .file_stem()
+                    .and_then(|oss| oss.to_str().map(|s| s.to_string()))
+                {
+                    if path.is_file() {
+                        match File::open(path) {
+                            Ok(mut f) => Some(tokio::spawn(async move {
+                                (path_string, Store::compute_digest_gz(&mut f))
+                            })),
+                            Err(error) => {
+                                log::error!(
+                                    "I/O error opening data file {}: {:?}",
+                                    path_string,
+                                    error
+                                );
+                                None
                             }
-                        } else {
-                            log::error!("Data item is not a file: {}", path_string);
-                            None
                         }
                     } else {
-                        log::error!("Data item file path error: {:?}", path);
+                        log::error!("Data item is not a file: {}", path_string);
                         None
                     }
+                } else {
+                    log::error!("Data item file path error: {:?}", path);
+                    None
                 }
-            });
+            }
+        });
 
-        let mut result: Vec<(String, String)> = futures::stream::iter(actions)
+        futures::stream::iter(actions)
             .buffer_unordered(parallelism)
             .filter_map(|handle| async {
                 match handle {
                     Ok((path_string, result)) => match result {
-                        Ok(digest) => {
-                            log::info!("{}", path_string);
-                            Some((path_string, digest))
-                        }
+                        Ok(digest) => Some(Ok((path_string, digest))),
                         Err(error) => {
                             log::error!(
                                 "Error computing digest for gz file {}: {:?}",
                                 path_string,
                                 error
                             );
-                            None
+                            Some(Err(path_string))
                         }
                     },
                     Err(error) => {
@@ -348,11 +358,6 @@ impl Store {
                     }
                 }
             })
-            .collect()
-            .await;
-
-        result.sort_by_key(|(digest, _)| digest.clone());
-        result
     }
 
     pub async fn export<F: Fn(&Item) -> bool, W: Write>(
