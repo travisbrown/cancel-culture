@@ -191,7 +191,13 @@ impl Store {
                 .records()
                 .map(|record| {
                     record.map_err(|err| err.into()).and_then(|row| {
-                        Item::from_row(&row.iter().map(|v| v.to_string()).collect::<Vec<_>>())
+                        Item::parse_optional(
+                            row.get(0),
+                            row.get(1),
+                            row.get(2),
+                            row.get(3),
+                            row.get(4),
+                        )
                     })
                 })
                 .collect::<Result<Vec<Item>>>()?
