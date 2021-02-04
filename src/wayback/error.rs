@@ -1,6 +1,7 @@
 use crate::twitter::store::wayback;
 use fantoccini::error::CmdError;
 use std::fmt::{Debug, Display, Formatter};
+use std::path::PathBuf;
 use tokio::task::JoinError;
 
 #[derive(Debug)]
@@ -14,6 +15,7 @@ pub enum Error {
     BrowserError(CmdError),
     TaskError(JoinError),
     TweetStoreError(wayback::TweetStoreError),
+    DataPathError(PathBuf),
 }
 
 impl Display for Error {

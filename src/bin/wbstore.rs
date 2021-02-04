@@ -33,6 +33,26 @@ async fn main() -> Result<()> {
                 })
                 .await;
         }
+        SubCommand::Merge(MergeCommand { base, incoming }) => {
+            let exclusions = Store::merge_data(&base, &incoming)?;
+            for exclusion in exclusions {
+                match exclusion.into_os_string().into_string() {
+                    Ok(p) => println!("{}", p),
+                    Err(e) => log::error!("Merge failure: {:?}", e),
+                }
+            }
+        }
+        SubCommand::Check(CheckDigest { value }) => {
+            if let Some(actual) = store.compute_item_digest(&value)? {
+                if actual == value {
+                    log::info!("{} has the correct digest", value);
+                } else {
+                    log::error!("{} has incorrect value {}", value, actual);
+                }
+            } else {
+                log::warn!("{} does not exist", value);
+            }
+        }
     }
 
     Ok(())
@@ -61,6 +81,8 @@ enum SubCommand {
     /// Perform a search for a batch of queries from stdin
     #[clap(version = crate_version!(), author = crate_authors!())]
     ComputeDigests,
+    Merge(MergeCommand),
+    Check(CheckDigest),
 }
 
 /// Export an archive for items whose URL contains the query string
@@ -71,6 +93,24 @@ struct ExportQuery {
     name: String,
     /// URL search query
     query: String,
+}
+
+/// Merge two data directories
+#[derive(Clap)]
+struct MergeCommand {
+    /// Base directory
+    #[clap(short, long)]
+    base: String,
+    /// Incoming directory
+    #[clap(short, long)]
+    incoming: String,
+}
+
+/// Check a single digest
+#[derive(Clap)]
+struct CheckDigest {
+    /// Digest to check
+    value: String,
 }
 
 async fn save_export_tgz(store: &Store, name: &str, query: &str) -> Result<()> {
