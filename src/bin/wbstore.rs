@@ -4,6 +4,7 @@ use cancel_culture::{
 };
 use clap::{crate_authors, crate_version, Clap};
 use flate2::{write::GzEncoder, Compression};
+use futures::StreamExt;
 use std::fs::File;
 
 #[tokio::main]
@@ -18,13 +19,19 @@ async fn main() -> Result<()> {
             save_export_tgz(&store, &name, &query).await?
         }
         SubCommand::ComputeDigests => {
-            let digest_pairs = store.compute_all_digests(opts.parallelism).await;
-
-            for (supposed, actual) in digest_pairs {
-                let items = store.items_by_digest(&supposed).await;
-                let status = items.get(0).and_then(|item| item.status).unwrap_or(0);
-                println!("{},{},{}", supposed, actual, status);
-            }
+            store
+                .compute_all_digests_stream(opts.parallelism)
+                .for_each(|res| async {
+                    match res {
+                        Ok((supposed, actual)) => {
+                            let items = store.items_by_digest(&supposed).await;
+                            let status = items.get(0).and_then(|item| item.status).unwrap_or(0);
+                            println!("{},{},{}", supposed, actual, status);
+                        }
+                        Err(_) => (),
+                    }
+                })
+                .await;
         }
     }
 
