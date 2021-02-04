@@ -1,10 +1,11 @@
 use cancel_culture::{
     cli,
-    wayback::{Result, Store},
+    wayback::{cdx::Client, Result, Store},
 };
 use clap::{crate_authors, crate_version, Clap};
 use flate2::{write::GzEncoder, Compression};
 use futures::StreamExt;
+use std::collections::HashSet;
 use std::fs::File;
 
 #[tokio::main]
@@ -53,6 +54,53 @@ async fn main() -> Result<()> {
                 log::warn!("{} does not exist", value);
             }
         }
+        SubCommand::Fix(FixCommand { base }) => {
+            let throttled_error_digest = "VU34ZWVLIWSRGLOVRZXIJGZXTWX54UOW";
+            let error_503_digest = "N67J36CWSVSGPQLJCVMHS3EG7Q4S5VNW";
+            let error_504_01_digest = "B575DWBDMQ22WKVZHPROOX4ZLEF3IRNA";
+            let error_504_02_digest = "GJIF3BEPWGUMFCQBBTKJ36KZZE5DZLVJ";
+            let known_bad = vec![
+                throttled_error_digest,
+                error_503_digest,
+                error_504_01_digest,
+                error_504_02_digest,
+            ]
+            .iter()
+            .map(|digest| digest.to_string())
+            .collect::<HashSet<_>>();
+
+            let client = Client::new();
+
+            store
+                .compute_all_digests_stream(opts.parallelism)
+                .zip(futures::stream::iter(0..))
+                .for_each_concurrent(4, |(res, i)| {
+                    if i % 100 == 0 {
+                        log::info!("At item index {}", i);
+                    }
+                    async {
+                        match res {
+                            Ok((supposed, actual)) => {
+                                if supposed != actual && known_bad.contains(&actual) {
+                                    let items = store.items_by_digest(&supposed).await;
+
+                                    for item in items {
+                                        client.download_gz_to_dir(&base, &item).await.unwrap();
+                                    }
+                                }
+                            }
+                            Err(digest) => {
+                                let items = store.items_by_digest(&digest).await;
+
+                                for item in items {
+                                    client.download_gz_to_dir(&base, &item).await.unwrap();
+                                }
+                            }
+                        }
+                    }
+                })
+                .await;
+        }
     }
 
     Ok(())
@@ -83,6 +131,7 @@ enum SubCommand {
     ComputeDigests,
     Merge(MergeCommand),
     Check(CheckDigest),
+    Fix(FixCommand),
 }
 
 /// Export an archive for items whose URL contains the query string
@@ -111,6 +160,14 @@ struct MergeCommand {
 struct CheckDigest {
     /// Digest to check
     value: String,
+}
+
+/// Re-download broken files
+#[derive(Clap)]
+struct FixCommand {
+    /// Base directory for temporary storage
+    #[clap(short, long)]
+    base: String,
 }
 
 async fn save_export_tgz(store: &Store, name: &str, query: &str) -> Result<()> {
