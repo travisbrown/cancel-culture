@@ -16,6 +16,7 @@ csv="1.1.4"
 data-encoding = "2.3.0"
 egg-mode = { git = "https://github.com/egg-mode-rs/egg-mode", rev = "6b81073eba9c3b123ca0e80bdb5ef61d1758f131" }
 fantoccini = { version = "0.17", features = [ "rustls-tls" ] }
+file_diff = "1.0.0"
 flate2 = "1.0"
 fs_extra = "1.2.0"
 futures = "0.3.7"
