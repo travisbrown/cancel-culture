@@ -54,6 +54,116 @@ async fn main() -> Result<()> {
                 log::warn!("{} does not exist", value);
             }
         }
+        SubCommand::ListValid(CheckValidCommand { dir }) => {
+            use std::fs::read_dir;
+
+            let mut sub_dirs = read_dir(dir)?.collect::<std::result::Result<Vec<_>, _>>()?;
+            sub_dirs.sort_by_key(|entry| entry.file_name());
+            let mut dir_names = HashSet::new();
+            dir_names.extend(('2'..='7').map(|c| c.to_string()));
+            dir_names.extend(('A'..='Z').map(|c| c.to_string()));
+
+            for entry in sub_dirs {
+                let name = entry.file_name().into_string().unwrap();
+                if entry.file_type()?.is_dir() {
+                    if dir_names.contains(&name) {
+                        let files = read_dir(entry.path())?;
+
+                        for file_result in files {
+                            let file_entry = file_result?;
+                            let file_name = file_entry.file_name().into_string().unwrap();
+
+                            if file_entry.file_type()?.is_file() {
+                                if file_name.starts_with(&name) {
+                                    match file_entry.path().file_stem().and_then(|os| os.to_str()) {
+                                        Some(stem) => println!("{}", stem),
+                                        None => {
+                                            log::error!("Skipping invalid file name: {}", file_name)
+                                        }
+                                    }
+                                } else {
+                                    log::error!("Skipping invalid file name: {}", file_name);
+                                }
+                            } else {
+                                log::error!("Expected directory, found: {}", file_name);
+                            }
+                        }
+                    } else {
+                        log::error!("Unexpected directory: {}", name);
+                    }
+                } else {
+                    log::error!("Expected directory, found file: {}", name);
+                }
+            }
+        }
+        SubCommand::CheckValid(CheckValidCommand { dir }) => {
+            use std::fs::read_dir;
+
+            let mut sub_dirs = read_dir(dir)?.collect::<std::result::Result<Vec<_>, _>>()?;
+            sub_dirs.sort_by_key(|entry| entry.file_name());
+            let mut dir_names = HashSet::new();
+            dir_names.extend(('2'..='7').map(|c| c.to_string()));
+            dir_names.extend(('A'..='Z').map(|c| c.to_string()));
+
+            let mut valid = 0;
+            let mut invalid = 0;
+
+            for entry in sub_dirs {
+                let name = entry.file_name().into_string().unwrap();
+                log::info!("Checking: {}", name);
+                if entry.file_type()?.is_dir() {
+                    if dir_names.contains(&name) {
+                        let files = read_dir(entry.path())?;
+
+                        for file_result in files {
+                            let file_entry = file_result?;
+                            let file_name = file_entry.file_name().into_string().unwrap();
+
+                            if file_entry.file_type()?.is_file() {
+                                if file_name.starts_with(&name) {
+                                    let mut file = File::open(file_entry.path())?;
+                                    match Store::compute_digest_gz(&mut file) {
+                                        Ok(actual) => {
+                                            let expected = format!("{}.gz", actual);
+
+                                            if file_name != expected {
+                                                invalid += 1;
+                                                log::error!("Invalid file: {}/{}", name, file_name);
+                                            } else {
+                                                valid += 1;
+                                            }
+                                        }
+                                        Err(error) => {
+                                            log::error!(
+                                                "Error reading file: {} ({:?})",
+                                                file_name,
+                                                error
+                                            );
+                                        }
+                                    }
+                                } else {
+                                    log::error!("Skipping invalid file name: {}", file_name);
+                                }
+                            } else {
+                                log::error!("Expected directory, found: {}", file_name);
+                            }
+                        }
+                    } else {
+                        log::error!("Unexpected directory: {}", name);
+                    }
+                } else {
+                    log::error!("Expected directory, found file: {}", name);
+                }
+            }
+
+            log::info!("Valid: {}; invalid: {}", valid, invalid);
+        }
+        SubCommand::Digest => {
+            let content = cli::read_stdin()?;
+            let mut bytes = content.as_bytes();
+            let digest = Store::compute_digest(&mut bytes)?;
+            println!("{}", digest);
+        }
         SubCommand::Fix(FixCommand { base }) => {
             let throttled_error_digest = "VU34ZWVLIWSRGLOVRZXIJGZXTWX54UOW";
             let error_503_digest = "N67J36CWSVSGPQLJCVMHS3EG7Q4S5VNW";
@@ -85,7 +195,10 @@ async fn main() -> Result<()> {
                                     let items = store.items_by_digest(&supposed).await;
 
                                     for item in items {
-                                        client.download_gz_to_dir(&base, &item).await.unwrap();
+                                        match client.download_gz_to_dir(&base, &item).await {
+                                            Ok(_) => (),
+                                            Err(err) => log::error!("Problem: {:?}", err),
+                                        }
                                     }
                                 }
                             }
@@ -126,12 +239,17 @@ struct Opts {
 enum SubCommand {
     #[clap(version = crate_version!(), author = crate_authors!())]
     Export(ExportQuery),
-    /// Perform a search for a batch of queries from stdin
+    /// Compute digest for all files in the store's data directory
     #[clap(version = crate_version!(), author = crate_authors!())]
     ComputeDigests,
     Merge(MergeCommand),
     Check(CheckDigest),
     Fix(FixCommand),
+    /// Compute digest for the input from stdin
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    Digest,
+    CheckValid(CheckValidCommand),
+    ListValid(CheckValidCommand),
 }
 
 /// Export an archive for items whose URL contains the query string
@@ -168,6 +286,14 @@ struct FixCommand {
     /// Base directory for temporary storage
     #[clap(short, long)]
     base: String,
+}
+
+/// Check a directory of known valid files
+#[derive(Clap)]
+struct CheckValidCommand {
+    /// Base directory
+    #[clap(short, long)]
+    dir: String,
 }
 
 async fn save_export_tgz(store: &Store, name: &str, query: &str) -> Result<()> {
