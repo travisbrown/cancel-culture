@@ -8,6 +8,15 @@ async fn main() -> valid::Result<()> {
     let _ = cli::init_logging(opts.verbose);
 
     match opts.command {
+        SubCommand::Create { dir } => {
+            valid::ValidStore::create(dir)?;
+        }
+        SubCommand::Extract { dir, digest } => {
+            let store = valid::ValidStore::new(dir);
+            if let Some(result) = store.extract(&digest) {
+                println!("{}", result?);
+            }
+        }
         SubCommand::List { dir, prefix } => {
             let store = valid::ValidStore::new(dir);
             let paths = store.paths_for_prefix(&prefix.unwrap_or("".to_string()));
@@ -65,18 +74,32 @@ struct Opts {
 
 #[derive(Clap)]
 enum SubCommand {
-    List {
-        /// Optional prefix
+    Create {
+        /// The base directory
         #[clap(short, long)]
-        prefix: Option<String>,
-        /// The base directory to check
         dir: String,
     },
-    Digests {
+    Extract {
+        /// The base directory
+        #[clap(short, long)]
+        dir: String,
+        // Digest
+        digest: String,
+    },
+    List {
+        /// The base directory
+        #[clap(short, long)]
+        dir: String,
         /// Optional prefix
         #[clap(short, long)]
         prefix: Option<String>,
-        /// The base directory to check
+    },
+    Digests {
+        /// The base directory
+        #[clap(short, long)]
         dir: String,
+        /// Optional prefix
+        #[clap(short, long)]
+        prefix: Option<String>,
     },
 }

@@ -1,8 +1,9 @@
+use flate2::read::GzDecoder;
 use futures::{FutureExt, Stream, TryStreamExt};
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 use std::fs::{read_dir, DirEntry, File};
-use std::io;
+use std::io::{self, Read};
 use std::iter::once;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -39,6 +40,18 @@ impl ValidStore {
         ValidStore {
             base: path.as_ref().to_path_buf().into_boxed_path(),
         }
+    }
+
+    pub fn create<P: AsRef<Path>>(base: P) -> std::io::Result<Self> {
+        let path = base.as_ref();
+
+        for name in NAMES.iter() {
+            std::fs::create_dir_all(path.join(name))?;
+        }
+
+        Ok(ValidStore {
+            base: path.to_path_buf().into_boxed_path(),
+        })
     }
 
     pub fn compute_digests(
@@ -96,9 +109,9 @@ impl ValidStore {
         match prefix.chars().next() {
             None => Box::new(self.paths()),
             Some(first_char) => {
-                if prefix.len() <= 32 && prefix.chars().all(|c| NAMES.contains(&c.to_string())) {
+                if Self::is_valid_prefix(prefix) {
                     let first = first_char.to_string();
-                    match read_dir(self.base.to_path_buf().join(&first)) {
+                    match read_dir(self.base.join(&first)) {
                         Err(error) => Box::new(once(Err(error.into())))
                             as Box<dyn Iterator<Item = Result<(String, PathBuf)>>>,
                         Ok(files) => {
@@ -123,6 +136,59 @@ impl ValidStore {
                 }
             }
         }
+    }
+
+    /*pub fn add_file<P: AsRef<Path>>(&self, candidate: P) -> {
+
+    }*/
+
+    pub fn lookup(&self, digest: &str) -> Option<Box<Path>> {
+        if Self::is_valid_digest(digest) {
+            digest.chars().next().and_then(|first_char| {
+                let path = self
+                    .base
+                    .join(&first_char.to_string())
+                    .join(format!("{}.gz", digest));
+
+                if path.is_file() {
+                    Some(path.into_boxed_path())
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn extract(&self, digest: &str) -> Option<std::io::Result<String>> {
+        self.lookup(digest).map(|path| {
+            let file = File::open(path)?;
+            let mut buffer = String::new();
+
+            GzDecoder::new(file).read_to_string(&mut buffer)?;
+
+            Ok(buffer)
+        })
+    }
+
+    pub fn extract_bytes(&self, digest: &str) -> Option<std::io::Result<Vec<u8>>> {
+        self.lookup(digest).map(|path| {
+            let file = File::open(path)?;
+            let mut buffer = Vec::new();
+
+            GzDecoder::new(file).read_to_end(&mut buffer)?;
+
+            Ok(buffer)
+        })
+    }
+
+    fn is_valid_digest(candidate: &str) -> bool {
+        candidate.len() == 32 && Self::is_valid_prefix(candidate)
+    }
+
+    fn is_valid_prefix(candidate: &str) -> bool {
+        candidate.len() <= 32 && candidate.chars().all(|c| NAMES.contains(&c.to_string()))
     }
 
     fn check_file(first: &str, entry: &DirEntry) -> Result<(String, PathBuf)> {
