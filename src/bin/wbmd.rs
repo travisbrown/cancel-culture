@@ -1,4 +1,4 @@
-use cancel_culture::{cli, wbm::valid};
+use cancel_culture::{cli, wbm::digest, wbm::valid};
 use clap::{crate_authors, crate_version, Clap};
 use futures::StreamExt;
 
@@ -54,6 +54,50 @@ async fn main() -> valid::Result<()> {
 
             log::info!("Valid: {}; invalid: {}; broken: {}", valid, invalid, broken);
         }
+        SubCommand::DigestsRaw { dir } => {
+            for result in std::fs::read_dir(dir)? {
+                let entry = result?;
+
+                if entry.path().is_file() {
+                    if let Some(name) = entry.path().file_stem().and_then(|os| os.to_str()) {
+                        let mut file = std::fs::File::open(entry.path())?;
+                        match digest::compute_digest_gz(&mut file) {
+                            Ok(digest) => {
+                                println!("{},{}", name, digest);
+                            }
+                            Err(error) => {
+                                log::error!("Error at {}: {:?}", name, error);
+                            }
+                        }
+                    } else {
+                        log::info!("Ignoring file: {:?}", entry.path());
+                    }
+                } else {
+                    log::info!("Ignoring directory: {:?}", entry.path());
+                }
+            }
+        }
+        SubCommand::AddFile { dir, input } => {
+            let store = valid::ValidStore::new(dir);
+
+            match store.check_file_location(&input)? {
+                None => log::warn!("File already exists in store: {}", input),
+                Some(Ok((name, location))) => {
+                    log::info!("Adding file with digest: {}", name);
+                    std::fs::copy(&input, &location)?;
+
+                    println!("{},{}", input, location.to_string_lossy());
+                }
+                Some(Err((expected, actual))) => {
+                    log::error!(
+                        "File to add has invalid digest (expected: {}; actual: {}): {}",
+                        expected,
+                        actual,
+                        input
+                    );
+                }
+            }
+        }
     }
 
     Ok(())
@@ -101,5 +145,19 @@ enum SubCommand {
         /// Optional prefix
         #[clap(short, long)]
         prefix: Option<String>,
+    },
+    /// Compute all digests for files in a directory
+    DigestsRaw {
+        /// The directory
+        #[clap(short, long)]
+        dir: String,
+    },
+    AddFile {
+        /// The base directory
+        #[clap(short, long)]
+        dir: String,
+        /// The file path to consider adding
+        #[clap(short, long)]
+        input: String,
     },
 }

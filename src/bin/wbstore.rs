@@ -183,16 +183,18 @@ async fn main() -> Result<()> {
             let items = store.filter(|item| item.status == Some(302)).await;
 
             for item in items {
-                if item.digest != "6Q4HKTYOVX4E7HQUF6TXAC4UUG2M227A"
-                    && item.digest != "ZBWFUJ2IKMYHPV6ER3CUG6F7GTDKSGVE"
-                {
-                    let existence_check = std::path::Path::new(&base)
-                        .join("good")
-                        .join(format!("{}.gz", item.digest));
-                    if !existence_check.exists() {
-                        match client.download_gz_to_dir(&base, &item).await {
-                            Ok(_) => (),
-                            Err(err) => log::error!("Problem: {:?}", err),
+                if !item.url.to_lowercase().contains("cernovich") {
+                    if item.digest != "6Q4HKTYOVX4E7HQUF6TXAC4UUG2M227A"
+                        && item.digest != "ZBWFUJ2IKMYHPV6ER3CUG6F7GTDKSGVE"
+                    {
+                        let existence_check = std::path::Path::new(&base)
+                            .join("good")
+                            .join(format!("{}.gz", item.digest));
+                        if !existence_check.exists() {
+                            match client.download_gz_to_dir(&base, &item).await {
+                                Ok(_) => (),
+                                Err(err) => log::error!("Problem: {:?}", err),
+                            }
                         }
                     }
                 }
@@ -208,48 +210,52 @@ async fn main() -> Result<()> {
             let fallback_re = regex::Regex::new(r#"<link rel=.canonical. href=.([^"]+)"#).unwrap();
 
             for item in items {
-                if let Ok(Some(content)) = store.read(&item.digest) {
-                    if let Some(canonical_match) = canonical_re.captures_iter(&content).next() {
-                        let canonical_screen_name = canonical_match.get(1).unwrap().as_str();
-                        let canonical_id = canonical_match.get(2).unwrap().as_str();
+                if !item.url.to_lowercase().contains("cernovich") {
+                    if let Ok(Some(content)) = store.read(&item.digest) {
+                        if let Some(canonical_match) = canonical_re.captures_iter(&content).next() {
+                            let canonical_screen_name = canonical_match.get(1).unwrap().as_str();
+                            let canonical_id = canonical_match.get(2).unwrap().as_str();
 
-                        let screen_name = permalink_re
-                            .captures_iter(&content)
-                            .filter_map(|m| {
-                                let psn = m.get(1).unwrap().as_str().to_string();
-                                if psn.to_lowercase() == canonical_screen_name.to_lowercase() {
-                                    Some(psn)
-                                } else {
-                                    None
-                                }
-                            })
-                            .next()
-                            .unwrap_or(canonical_screen_name.to_string());
+                            let screen_name = permalink_re
+                                .captures_iter(&content)
+                                .filter_map(|m| {
+                                    let psn = m.get(1).unwrap().as_str().to_string();
+                                    if psn.to_lowercase() == canonical_screen_name.to_lowercase() {
+                                        Some(psn)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .next()
+                                .unwrap_or(canonical_screen_name.to_string());
 
-                        let new_content = format!(
+                            let new_content = format!(
                           "<html><body>You are being <a href=\"https://twitter.com/{}/status/{}\">redirected</a>.</body></html>",
                           screen_name,
                           canonical_id
                         );
-                        let mut ncb = new_content.as_bytes();
-
-                        let guess_digest = Store::compute_digest(&mut ncb)?;
-
-                        if guess_digest == item.digest {
-                            save_contents_gz(&item, &base, new_content.as_bytes())?;
-                        }
-                    } else {
-                        if let Some(canonical_match) = fallback_re.captures_iter(&content).next() {
-                            let new_content = format!(
-                              "<html><body>You are being <a href=\"{}\">redirected</a>.</body></html>",
-                              canonical_match.get(1).unwrap().as_str()
-                            );
                             let mut ncb = new_content.as_bytes();
 
                             let guess_digest = Store::compute_digest(&mut ncb)?;
 
                             if guess_digest == item.digest {
                                 save_contents_gz(&item, &base, new_content.as_bytes())?;
+                            }
+                        } else {
+                            if let Some(canonical_match) =
+                                fallback_re.captures_iter(&content).next()
+                            {
+                                let new_content = format!(
+                              "<html><body>You are being <a href=\"{}\">redirected</a>.</body></html>",
+                              canonical_match.get(1).unwrap().as_str()
+                            );
+                                let mut ncb = new_content.as_bytes();
+
+                                let guess_digest = Store::compute_digest(&mut ncb)?;
+
+                                if guess_digest == item.digest {
+                                    save_contents_gz(&item, &base, new_content.as_bytes())?;
+                                }
                             }
                         }
                     }

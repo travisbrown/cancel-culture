@@ -12,8 +12,8 @@ use thiserror::Error;
 pub enum Error {
     #[error("Unexpected item: {path:?}")]
     Unexpected { path: Box<Path> },
-    #[error("Invalid search prefix: {0}")]
-    InvalidPrefix(String),
+    #[error("Invalid digest or prefix: {0}")]
+    InvalidDigest(String),
     #[error("I/O error")]
     IOError(#[from] io::Error),
     #[error("Unexpected error while computing digests")]
@@ -84,7 +84,7 @@ impl ValidStore {
                 dirs.sort_by_key(|entry| entry.file_name());
                 Box::new(
                     dirs.into_iter()
-                        .flat_map(|entry| match Self::check_dir(&entry) {
+                        .flat_map(|entry| match Self::check_dir_entry(&entry) {
                             Err(error) => Box::new(once(Err(error)))
                                 as Box<dyn Iterator<Item = Result<(String, PathBuf)>>>,
                             Ok(first) => match read_dir(entry.path()) {
@@ -93,7 +93,7 @@ impl ValidStore {
                                 Ok(files) => Box::new(files.map(move |result| {
                                     result
                                         .map_err(Error::from)
-                                        .and_then(|entry| Self::check_file(&first, &entry))
+                                        .and_then(|entry| Self::check_file_entry(&first, &entry))
                                 })),
                             },
                         }),
@@ -119,9 +119,9 @@ impl ValidStore {
                             Box::new(
                                 files
                                     .map(move |result| {
-                                        result
-                                            .map_err(Error::from)
-                                            .and_then(|entry| Self::check_file(&first, &entry))
+                                        result.map_err(Error::from).and_then(|entry| {
+                                            Self::check_file_entry(&first, &entry)
+                                        })
                                     })
                                     .filter(move |result| match result {
                                         Ok((name, _)) => name.starts_with(&p),
@@ -131,18 +131,50 @@ impl ValidStore {
                         }
                     }
                 } else {
-                    Box::new(once(Err(Error::InvalidPrefix(prefix.to_string()))))
+                    Box::new(once(Err(Error::InvalidDigest(prefix.to_string()))))
                         as Box<dyn Iterator<Item = Result<(String, PathBuf)>>>
                 }
             }
         }
     }
 
-    /*pub fn add_file<P: AsRef<Path>>(&self, candidate: P) -> {
+    pub fn check_file_location<P: AsRef<Path>>(
+        &self,
+        candidate: P,
+    ) -> Result<Option<std::result::Result<(String, Box<Path>), (String, String)>>> {
+        let path = candidate.as_ref();
 
-    }*/
+        if let Some((name, ext)) = path
+            .file_stem()
+            .and_then(|os| os.to_str())
+            .zip(path.extension().and_then(|os| os.to_str()))
+        {
+            if Self::is_valid_digest(&name) && ext == "gz" {
+                if let Some(location) = self.location(name) {
+                    if location.is_file() {
+                        Ok(None)
+                    } else {
+                        let mut file = File::open(path)?;
+                        let digest = super::digest::compute_digest_gz(&mut file)?;
 
-    pub fn lookup(&self, digest: &str) -> Option<Box<Path>> {
+                        if digest == name {
+                            Ok(Some(Ok((name.to_string(), location))))
+                        } else {
+                            Ok(Some(Err((name.to_string(), digest))))
+                        }
+                    }
+                } else {
+                    Err(Error::InvalidDigest(name.to_string()))
+                }
+            } else {
+                Err(Error::InvalidDigest(name.to_string()))
+            }
+        } else {
+            Err(Error::InvalidDigest(path.to_string_lossy().into_owned()))
+        }
+    }
+
+    pub fn location(&self, digest: &str) -> Option<Box<Path>> {
         if Self::is_valid_digest(digest) {
             digest.chars().next().and_then(|first_char| {
                 let path = self
@@ -150,15 +182,15 @@ impl ValidStore {
                     .join(&first_char.to_string())
                     .join(format!("{}.gz", digest));
 
-                if path.is_file() {
-                    Some(path.into_boxed_path())
-                } else {
-                    None
-                }
+                Some(path.into_boxed_path())
             })
         } else {
             None
         }
+    }
+
+    pub fn lookup(&self, digest: &str) -> Option<Box<Path>> {
+        self.location(digest).filter(|path| path.is_file())
     }
 
     pub fn extract(&self, digest: &str) -> Option<std::io::Result<String>> {
@@ -191,7 +223,7 @@ impl ValidStore {
         candidate.len() <= 32 && candidate.chars().all(|c| NAMES.contains(&c.to_string()))
     }
 
-    fn check_file(first: &str, entry: &DirEntry) -> Result<(String, PathBuf)> {
+    fn check_file_entry(first: &str, entry: &DirEntry) -> Result<(String, PathBuf)> {
         if entry.file_type()?.is_file() {
             match entry.path().file_stem().and_then(|os| os.to_str()) {
                 None => Err(Error::Unexpected {
@@ -214,7 +246,7 @@ impl ValidStore {
         }
     }
 
-    fn check_dir(entry: &DirEntry) -> Result<String> {
+    fn check_dir_entry(entry: &DirEntry) -> Result<String> {
         if entry.file_type()?.is_dir() {
             match entry.file_name().into_string() {
                 Err(_) => Err(Error::Unexpected {
