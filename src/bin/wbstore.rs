@@ -1,9 +1,9 @@
 use cancel_culture::{
     cli,
-    wayback::{cdx::Client, Result, Store},
+    wayback::{cdx::Client, Item, Result, Store},
 };
 use clap::{crate_authors, crate_version, Clap};
-use flate2::{write::GzEncoder, Compression};
+use flate2::{write::GzEncoder, Compression, GzBuilder};
 use futures::StreamExt;
 use std::collections::HashSet;
 use std::fs::File;
@@ -198,6 +198,64 @@ async fn main() -> Result<()> {
                 }
             }
         }
+        SubCommand::GuessRedirects(FixCommand { base }) => {
+            let items = store.filter(|item| item.status == Some(302)).await;
+            let canonical_re = regex::Regex::new(
+                r#"<link rel=.canonical. href=.https...twitter.com.([^/]+)/status/(\d+)"#,
+            )
+            .unwrap();
+            let permalink_re = regex::Regex::new(r"data-permalink-path=./([^/]+)").unwrap();
+            let fallback_re = regex::Regex::new(r#"<link rel=.canonical. href=.([^"]+)"#).unwrap();
+
+            for item in items {
+                if let Ok(Some(content)) = store.read(&item.digest) {
+                    if let Some(canonical_match) = canonical_re.captures_iter(&content).next() {
+                        let canonical_screen_name = canonical_match.get(1).unwrap().as_str();
+                        let canonical_id = canonical_match.get(2).unwrap().as_str();
+
+                        let screen_name = canonical_re
+                            .captures_iter(&content)
+                            .filter_map(|m| {
+                                let psn = m.get(1).unwrap().as_str().to_string();
+                                if psn.to_lowercase() == canonical_screen_name.to_lowercase() {
+                                    Some(psn)
+                                } else {
+                                    None
+                                }
+                            })
+                            .next()
+                            .unwrap_or(canonical_screen_name.to_string());
+
+                        let new_content = format!(
+                          "<html><body>You are being <a href=\"https://twitter.com/{}/status/{}\">redirected</a>.</body></html>",
+                          screen_name,
+                          canonical_id
+                        );
+                        let mut ncb = new_content.as_bytes();
+
+                        let guess_digest = Store::compute_digest(&mut ncb)?;
+
+                        if guess_digest == item.digest {
+                            save_contents_gz(&item, &base, new_content.as_bytes());
+                        }
+                    } else {
+                        if let Some(canonical_match) = fallback_re.captures_iter(&content).next() {
+                            let new_content = format!(
+                              "<html><body>You are being <a href=\"{}\">redirected</a>.</body></html>",
+                              canonical_match.get(1).unwrap().as_str()
+                            );
+                            let mut ncb = new_content.as_bytes();
+
+                            let guess_digest = Store::compute_digest(&mut ncb)?;
+
+                            if guess_digest == item.digest {
+                                save_contents_gz(&item, &base, new_content.as_bytes());
+                            }
+                        }
+                    }
+                }
+            }
+        }
         SubCommand::Fix(FixCommand { base }) => {
             let throttled_error_digest = "VU34ZWVLIWSRGLOVRZXIJGZXTWX54UOW";
             let error_503_digest = "N67J36CWSVSGPQLJCVMHS3EG7Q4S5VNW";
@@ -281,6 +339,7 @@ enum SubCommand {
     Check(CheckDigest),
     Fix(FixCommand),
     FixRedirects(FixCommand),
+    GuessRedirects(FixCommand),
     /// Compute digest for the input from stdin
     #[clap(version = crate_version!(), author = crate_authors!())]
     Digest,
@@ -341,5 +400,18 @@ async fn save_export_tgz(store: &Store, name: &str, query: &str) -> Result<()> {
         })
         .await?;
 
+    Ok(())
+}
+
+fn save_contents_gz(item: &Item, base: &str, content: &[u8]) -> Result<()> {
+    use std::io::Write;
+
+    log::info!("Saving {} to {:?} ({})", item.digest, base, item.url);
+    let file = File::create(std::path::Path::new(base).join(format!("{}.gz", item.digest)))?;
+    let mut gz = GzBuilder::new()
+        .filename(item.infer_filename())
+        .write(file, Compression::default());
+    gz.write_all(&content)?;
+    gz.finish()?;
     Ok(())
 }
