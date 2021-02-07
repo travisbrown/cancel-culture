@@ -3,7 +3,7 @@ use bytes::Bytes;
 use flate2::{Compression, GzBuilder};
 use futures::{Future, FutureExt, StreamExt, TryStreamExt};
 use log::info;
-use reqwest::Client as RClient;
+use reqwest::{redirect, Client as RClient};
 use std::fs::File;
 use std::io::{BufReader, Read, Write};
 use std::ops::Deref;
@@ -23,6 +23,16 @@ impl Client {
         Client {
             underlying: RClient::builder()
                 .tcp_keepalive(Some(Duration::from_secs(20)))
+                .build()
+                .unwrap(),
+        }
+    }
+
+    pub fn new_without_redirects() -> Client {
+        Client {
+            underlying: RClient::builder()
+                .tcp_keepalive(Some(Duration::from_secs(20)))
+                .redirect(redirect::Policy::none())
                 .build()
                 .unwrap(),
         }
