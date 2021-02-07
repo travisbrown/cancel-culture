@@ -164,6 +164,25 @@ async fn main() -> Result<()> {
             let digest = Store::compute_digest(&mut bytes)?;
             println!("{}", digest);
         }
+        SubCommand::FixRedirects(FixCommand { base }) => {
+            let client = Client::new_without_redirects();
+
+            let items = store.filter(|item| item.status == Some(302)).await;
+
+            for item in items {
+                if item.digest != "6Q4HKTYOVX4E7HQUF6TXAC4UUG2M227A" {
+                    let existence_check = std::path::Path::new(&base)
+                        .join("good")
+                        .join(format!("{}.gz", item.digest));
+                    if !existence_check.exists() {
+                        match client.download_gz_to_dir(&base, &item).await {
+                            Ok(_) => (),
+                            Err(err) => log::error!("Problem: {:?}", err),
+                        }
+                    }
+                }
+            }
+        }
         SubCommand::Fix(FixCommand { base }) => {
             let throttled_error_digest = "VU34ZWVLIWSRGLOVRZXIJGZXTWX54UOW";
             let error_503_digest = "N67J36CWSVSGPQLJCVMHS3EG7Q4S5VNW";
@@ -245,6 +264,7 @@ enum SubCommand {
     Merge(MergeCommand),
     Check(CheckDigest),
     Fix(FixCommand),
+    FixRedirects(FixCommand),
     /// Compute digest for the input from stdin
     #[clap(version = crate_version!(), author = crate_authors!())]
     Digest,
