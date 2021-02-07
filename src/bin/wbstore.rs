@@ -34,6 +34,19 @@ async fn main() -> Result<()> {
                 })
                 .await;
         }
+        SubCommand::ComputeDigestsRaw => {
+            store
+                .compute_all_digests_stream(opts.parallelism)
+                .for_each(|res| async {
+                    match res {
+                        Ok((supposed, actual)) => {
+                            println!("{},{}", supposed, actual);
+                        }
+                        Err(_) => (),
+                    }
+                })
+                .await;
+        }
         SubCommand::Merge(MergeCommand { base, incoming }) => {
             let exclusions = Store::merge_data(&base, &incoming)?;
             for exclusion in exclusions {
@@ -170,7 +183,9 @@ async fn main() -> Result<()> {
             let items = store.filter(|item| item.status == Some(302)).await;
 
             for item in items {
-                if item.digest != "6Q4HKTYOVX4E7HQUF6TXAC4UUG2M227A" {
+                if item.digest != "6Q4HKTYOVX4E7HQUF6TXAC4UUG2M227A"
+                    && item.digest != "ZBWFUJ2IKMYHPV6ER3CUG6F7GTDKSGVE"
+                {
                     let existence_check = std::path::Path::new(&base)
                         .join("good")
                         .join(format!("{}.gz", item.digest));
@@ -261,6 +276,7 @@ enum SubCommand {
     /// Compute digest for all files in the store's data directory
     #[clap(version = crate_version!(), author = crate_authors!())]
     ComputeDigests,
+    ComputeDigestsRaw,
     Merge(MergeCommand),
     Check(CheckDigest),
     Fix(FixCommand),

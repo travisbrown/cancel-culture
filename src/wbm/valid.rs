@@ -1,0 +1,173 @@
+use futures::{FutureExt, Stream, TryStreamExt};
+use lazy_static::lazy_static;
+use std::collections::HashSet;
+use std::fs::{read_dir, DirEntry, File};
+use std::io;
+use std::iter::once;
+use std::path::{Path, PathBuf};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("Unexpected item: {path:?}")]
+    Unexpected { path: Box<Path> },
+    #[error("Invalid search prefix: {0}")]
+    InvalidPrefix(String),
+    #[error("I/O error")]
+    IOError(#[from] io::Error),
+    #[error("Unexpected error while computing digests")]
+    DigestComputationError,
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+lazy_static! {
+    static ref NAMES: HashSet<String> = {
+        let mut names = HashSet::new();
+        names.extend(('2'..='7').map(|c| c.to_string()));
+        names.extend(('A'..='Z').map(|c| c.to_string()));
+        names
+    };
+}
+
+pub struct ValidStore {
+    base: Box<Path>,
+}
+
+impl ValidStore {
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+        ValidStore {
+            base: path.as_ref().to_path_buf().into_boxed_path(),
+        }
+    }
+
+    pub fn compute_digests(
+        &self,
+        prefix: Option<&str>,
+        n: usize,
+    ) -> impl Stream<Item = Result<(String, String)>> {
+        futures::stream::iter(self.paths_for_prefix(prefix.unwrap_or("")))
+            .map_ok(|(expected, path)| {
+                tokio::spawn(async {
+                    let mut file = File::open(path)?;
+                    let actual = super::digest::compute_digest_gz(&mut file)?;
+
+                    Ok((expected, actual))
+                })
+                .map(|result| match result {
+                    Ok(Err(e)) => Err(e),
+                    Ok(Ok(value)) => Ok(value),
+                    Err(_) => Err(Error::DigestComputationError),
+                })
+            })
+            .try_buffer_unordered(n)
+    }
+
+    pub fn paths(&self) -> impl Iterator<Item = Result<(String, PathBuf)>> {
+        match read_dir(&self.base).and_then(|it| it.collect::<std::result::Result<Vec<_>, _>>()) {
+            Err(error) => Box::new(once(Err(error.into())))
+                as Box<dyn Iterator<Item = Result<(String, PathBuf)>>>,
+            Ok(mut dirs) => {
+                dirs.sort_by_key(|entry| entry.file_name());
+                Box::new(
+                    dirs.into_iter()
+                        .flat_map(|entry| match Self::check_dir(&entry) {
+                            Err(error) => Box::new(once(Err(error)))
+                                as Box<dyn Iterator<Item = Result<(String, PathBuf)>>>,
+                            Ok(first) => match read_dir(entry.path()) {
+                                Err(error) => Box::new(once(Err(error.into())))
+                                    as Box<dyn Iterator<Item = Result<(String, PathBuf)>>>,
+                                Ok(files) => Box::new(files.map(move |result| {
+                                    result
+                                        .map_err(Error::from)
+                                        .and_then(|entry| Self::check_file(&first, &entry))
+                                })),
+                            },
+                        }),
+                )
+            }
+        }
+    }
+
+    pub fn paths_for_prefix(
+        &self,
+        prefix: &str,
+    ) -> impl Iterator<Item = Result<(String, PathBuf)>> {
+        match prefix.chars().next() {
+            None => Box::new(self.paths()),
+            Some(first_char) => {
+                if prefix.len() <= 32 && prefix.chars().all(|c| NAMES.contains(&c.to_string())) {
+                    let first = first_char.to_string();
+                    match read_dir(self.base.to_path_buf().join(&first)) {
+                        Err(error) => Box::new(once(Err(error.into())))
+                            as Box<dyn Iterator<Item = Result<(String, PathBuf)>>>,
+                        Ok(files) => {
+                            let p = prefix.to_string();
+                            Box::new(
+                                files
+                                    .map(move |result| {
+                                        result
+                                            .map_err(Error::from)
+                                            .and_then(|entry| Self::check_file(&first, &entry))
+                                    })
+                                    .filter(move |result| match result {
+                                        Ok((name, _)) => name.starts_with(&p),
+                                        Err(_) => true,
+                                    }),
+                            )
+                        }
+                    }
+                } else {
+                    Box::new(once(Err(Error::InvalidPrefix(prefix.to_string()))))
+                        as Box<dyn Iterator<Item = Result<(String, PathBuf)>>>
+                }
+            }
+        }
+    }
+
+    fn check_file(first: &str, entry: &DirEntry) -> Result<(String, PathBuf)> {
+        if entry.file_type()?.is_file() {
+            match entry.path().file_stem().and_then(|os| os.to_str()) {
+                None => Err(Error::Unexpected {
+                    path: entry.path().into_boxed_path(),
+                }),
+                Some(name) => {
+                    if name.starts_with(&first) {
+                        Ok((name.to_string(), entry.path()))
+                    } else {
+                        Err(Error::Unexpected {
+                            path: entry.path().into_boxed_path(),
+                        })
+                    }
+                }
+            }
+        } else {
+            Err(Error::Unexpected {
+                path: entry.path().into_boxed_path(),
+            })
+        }
+    }
+
+    fn check_dir(entry: &DirEntry) -> Result<String> {
+        if entry.file_type()?.is_dir() {
+            match entry.file_name().into_string() {
+                Err(_) => Err(Error::Unexpected {
+                    path: entry.path().into_boxed_path(),
+                }),
+                Ok(name) => {
+                    if NAMES.contains(&name) {
+                        Ok(name)
+                    } else {
+                        Err(Error::Unexpected {
+                            path: entry.path().into_boxed_path(),
+                        })
+                    }
+                }
+            }
+        } else {
+            Err(Error::Unexpected {
+                path: entry.path().into_boxed_path(),
+            })
+        }
+    }
+}
