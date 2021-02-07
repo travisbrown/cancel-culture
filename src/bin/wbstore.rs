@@ -213,7 +213,7 @@ async fn main() -> Result<()> {
                         let canonical_screen_name = canonical_match.get(1).unwrap().as_str();
                         let canonical_id = canonical_match.get(2).unwrap().as_str();
 
-                        let screen_name = canonical_re
+                        let screen_name = permalink_re
                             .captures_iter(&content)
                             .filter_map(|m| {
                                 let psn = m.get(1).unwrap().as_str().to_string();
@@ -236,7 +236,7 @@ async fn main() -> Result<()> {
                         let guess_digest = Store::compute_digest(&mut ncb)?;
 
                         if guess_digest == item.digest {
-                            save_contents_gz(&item, &base, new_content.as_bytes());
+                            save_contents_gz(&item, &base, new_content.as_bytes())?;
                         }
                     } else {
                         if let Some(canonical_match) = fallback_re.captures_iter(&content).next() {
@@ -249,7 +249,7 @@ async fn main() -> Result<()> {
                             let guess_digest = Store::compute_digest(&mut ncb)?;
 
                             if guess_digest == item.digest {
-                                save_contents_gz(&item, &base, new_content.as_bytes());
+                                save_contents_gz(&item, &base, new_content.as_bytes())?;
                             }
                         }
                     }
