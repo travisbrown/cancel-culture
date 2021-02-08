@@ -23,13 +23,10 @@ async fn main() -> Result<()> {
             store
                 .compute_all_digests_stream(opts.parallelism)
                 .for_each(|res| async {
-                    match res {
-                        Ok((supposed, actual)) => {
-                            let items = store.items_by_digest(&supposed).await;
-                            let status = items.get(0).and_then(|item| item.status).unwrap_or(0);
-                            println!("{},{},{}", supposed, actual, status);
-                        }
-                        Err(_) => (),
+                    if let Ok((supposed, actual)) = res {
+                        let items = store.items_by_digest(&supposed).await;
+                        let status = items.get(0).and_then(|item| item.status).unwrap_or(0);
+                        println!("{},{},{}", supposed, actual, status);
                     }
                 })
                 .await;
@@ -38,11 +35,8 @@ async fn main() -> Result<()> {
             store
                 .compute_all_digests_stream(opts.parallelism)
                 .for_each(|res| async {
-                    match res {
-                        Ok((supposed, actual)) => {
-                            println!("{},{}", supposed, actual);
-                        }
-                        Err(_) => (),
+                    if let Ok((supposed, actual)) = res {
+                        println!("{},{}", supposed, actual);
                     }
                 })
                 .await;
@@ -227,7 +221,7 @@ async fn main() -> Result<()> {
                                     }
                                 })
                                 .next()
-                                .unwrap_or(canonical_screen_name.to_string());
+                                .unwrap_or_else(|| canonical_screen_name.to_string());
 
                             let new_content = format!(
                           "<html><body>You are being <a href=\"https://twitter.com/{}/status/{}\">redirected</a>.</body></html>",

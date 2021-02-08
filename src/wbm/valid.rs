@@ -176,13 +176,13 @@ impl ValidStore {
 
     pub fn location(&self, digest: &str) -> Option<Box<Path>> {
         if Self::is_valid_digest(digest) {
-            digest.chars().next().and_then(|first_char| {
+            digest.chars().next().map(|first_char| {
                 let path = self
                     .base
                     .join(&first_char.to_string())
                     .join(format!("{}.gz", digest));
 
-                Some(path.into_boxed_path())
+                path.into_boxed_path()
             })
         } else {
             None

@@ -96,7 +96,7 @@ impl Client {
             .exponential_backoff(Duration::from_millis(250))
             .await?;
 
-        let actual = Store::compute_digest(&mut result.clone().deref())?;
+        let actual = Store::compute_digest(&mut result.deref())?;
 
         if actual == item.digest {
             log::info!("Saving {} to {:?} ({})", actual, good_dir, item.url);

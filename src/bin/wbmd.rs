@@ -19,7 +19,7 @@ async fn main() -> valid::Result<()> {
         }
         SubCommand::List { dir, prefix } => {
             let store = valid::ValidStore::new(dir);
-            let paths = store.paths_for_prefix(&prefix.unwrap_or("".to_string()));
+            let paths = store.paths_for_prefix(&prefix.unwrap_or_else(|| "".to_string()));
 
             for result in paths {
                 println!("{}", result?.0);
