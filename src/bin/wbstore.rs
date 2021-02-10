@@ -7,6 +7,7 @@ use flate2::{write::GzEncoder, Compression, GzBuilder};
 use futures::StreamExt;
 use std::collections::HashSet;
 use std::fs::File;
+use std::io::BufRead;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -171,13 +172,25 @@ async fn main() -> Result<()> {
             let digest = Store::compute_digest(&mut bytes)?;
             println!("{}", digest);
         }
-        SubCommand::FixRedirects(FixCommand { base }) => {
+        SubCommand::FixRedirects(FixCommand { base, known }) => {
+            let mut known_digests = HashSet::new();
+
+            if let Some(known_path) = known {
+                let file = std::io::BufReader::new(File::open(known_path)?);
+                for line in file.lines() {
+                    known_digests.insert(line?);
+                }
+            }
+
             let client = Client::new_without_redirects();
 
             let items = store.filter(|item| item.status == Some(302)).await;
 
             for item in items {
-                if !item.url.to_lowercase().contains("cernovich") {
+                if !item.url.to_lowercase().contains("cernovich")
+                    && !item.url.to_lowercase().contains("chiefscientist")
+                    && !known_digests.contains(&item.digest)
+                {
                     if item.digest != "6Q4HKTYOVX4E7HQUF6TXAC4UUG2M227A"
                         && item.digest != "ZBWFUJ2IKMYHPV6ER3CUG6F7GTDKSGVE"
                     {
@@ -186,7 +199,9 @@ async fn main() -> Result<()> {
                             .join(format!("{}.gz", item.digest));
                         if !existence_check.exists() {
                             match client.download_gz_to_dir(&base, &item).await {
-                                Ok(_) => (),
+                                Ok(_) => {
+                                    known_digests.insert(item.digest);
+                                }
                                 Err(err) => log::error!("Problem: {:?}", err),
                             }
                         }
@@ -194,7 +209,16 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        SubCommand::GuessRedirects(FixCommand { base }) => {
+        SubCommand::GuessRedirects(FixCommand { base, known }) => {
+            let mut known_digests = HashSet::new();
+
+            if let Some(known_path) = known {
+                let file = std::io::BufReader::new(File::open(known_path)?);
+                for line in file.lines() {
+                    known_digests.insert(line?);
+                }
+            }
+
             let items = store.filter(|item| item.status == Some(302)).await;
             let canonical_re = regex::Regex::new(
                 r#"<link rel=.canonical. href=.https...twitter.com.([^/]+)/status/(\d+)"#,
@@ -204,7 +228,9 @@ async fn main() -> Result<()> {
             let fallback_re = regex::Regex::new(r#"<link rel=.canonical. href=.([^"]+)"#).unwrap();
 
             for item in items {
-                if !item.url.to_lowercase().contains("cernovich") {
+                if !item.url.to_lowercase().contains("cernovich")
+                    && !known_digests.contains(&item.digest)
+                {
                     if let Ok(Some(content)) = store.read(&item.digest) {
                         if let Some(canonical_match) = canonical_re.captures_iter(&content).next() {
                             let canonical_screen_name = canonical_match.get(1).unwrap().as_str();
@@ -256,7 +282,7 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        SubCommand::Fix(FixCommand { base }) => {
+        SubCommand::Fix(FixCommand { base, .. }) => {
             let throttled_error_digest = "VU34ZWVLIWSRGLOVRZXIJGZXTWX54UOW";
             let error_503_digest = "N67J36CWSVSGPQLJCVMHS3EG7Q4S5VNW";
             let error_504_01_digest = "B575DWBDMQ22WKVZHPROOX4ZLEF3IRNA";
@@ -381,6 +407,9 @@ struct FixCommand {
     /// Base directory for temporary storage
     #[clap(short, long)]
     base: String,
+    /// Known digest file
+    #[clap(short, long)]
+    known: Option<String>,
 }
 
 /// Check a directory of known valid files
