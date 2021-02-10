@@ -1,9 +1,13 @@
-use cancel_culture::{cli, wbm::digest, wbm::valid};
+use cancel_culture::{cli, wbm, wbm::digest, wbm::valid};
 use clap::{crate_authors, crate_version, Clap};
 use futures::StreamExt;
+use std::path::Path;
+
+type Void = Result<(), Box<dyn std::error::Error>>;
 
 #[tokio::main]
-async fn main() -> valid::Result<()> {
+async fn main() -> Void {
+    //valid::Result<()> {
     let opts: Opts = Opts::parse();
     let _ = cli::init_logging(opts.verbose);
 
@@ -77,6 +81,34 @@ async fn main() -> valid::Result<()> {
                 }
             }
         }
+        SubCommand::RenameRaw { dir, out } => {
+            let out_path = Path::new(&out);
+
+            for result in std::fs::read_dir(dir)? {
+                let entry = result?;
+
+                if entry.path().is_file() {
+                    if let Some(name) = entry.path().file_stem().and_then(|os| os.to_str()) {
+                        let mut file = std::fs::File::open(entry.path())?;
+                        match digest::compute_digest_gz(&mut file) {
+                            Ok(digest) => {
+                                std::fs::copy(
+                                    entry.path(),
+                                    out_path.join(format!("{}.gz", digest)),
+                                )?;
+                            }
+                            Err(error) => {
+                                log::error!("Error at {}: {:?}", name, error);
+                            }
+                        }
+                    } else {
+                        log::info!("Ignoring file: {:?}", entry.path());
+                    }
+                } else {
+                    log::info!("Ignoring directory: {:?}", entry.path());
+                }
+            }
+        }
         SubCommand::AddFile { dir, input } => {
             let store = valid::ValidStore::new(dir);
 
@@ -97,6 +129,26 @@ async fn main() -> valid::Result<()> {
                     );
                 }
             }
+        }
+        SubCommand::DownloadQuery {
+            valid,
+            other,
+            redirect_mapping,
+            invalid_mapping,
+            query,
+        } => {
+            let downloader =
+                wbm::Downloader::new(valid, other, redirect_mapping, invalid_mapping, "output")?;
+            let client = cancel_culture::wayback::cdx::Client::new();
+
+            let results = client.search(&query).await?;
+
+            downloader.save_all(&results).await?;
+        }
+        SubCommand::Validate { dir } => {
+            let s = wbm::store::Store::load(dir)?;
+
+            println!("{:?}", s.sizes().await);
         }
     }
 
@@ -152,6 +204,15 @@ enum SubCommand {
         #[clap(short, long)]
         dir: String,
     },
+    /// Compute all digests for files in a directory and rename them accordingly
+    RenameRaw {
+        /// The directory
+        #[clap(short, long)]
+        dir: String,
+        /// The output directory
+        #[clap(short, long)]
+        out: String,
+    },
     AddFile {
         /// The base directory
         #[clap(short, long)]
@@ -159,5 +220,26 @@ enum SubCommand {
         /// The file path to consider adding
         #[clap(short, long)]
         input: String,
+    },
+    DownloadQuery {
+        /// The valid base directory
+        #[clap(short, long)]
+        valid: String,
+        /// The invalid base directory
+        #[clap(short, long)]
+        other: String,
+        /// The redirect mapping file
+        #[clap(short, long)]
+        redirect_mapping: String,
+        /// The redirect mapping file
+        #[clap(short, long)]
+        invalid_mapping: String,
+        /// The query
+        query: String,
+    },
+    Validate {
+        /// The base directory
+        #[clap(short, long)]
+        dir: String,
     },
 }

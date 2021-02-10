@@ -189,6 +189,10 @@ impl ValidStore {
         }
     }
 
+    pub fn contains(&self, digest: &str) -> bool {
+        self.lookup(digest).is_some()
+    }
+
     pub fn lookup(&self, digest: &str) -> Option<Box<Path>> {
         self.location(digest).filter(|path| path.is_file())
     }
