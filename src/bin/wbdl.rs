@@ -3,6 +3,8 @@ use cancel_culture::{
     wayback::{cdx::Client, Result, Store},
 };
 use clap::{crate_authors, crate_version, Clap};
+use std::collections::HashSet;
+use std::io::BufRead;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -10,6 +12,15 @@ async fn main() -> Result<()> {
     let _ = cli::init_logging(opts.verbose);
 
     let client = Client::new();
+
+    let filter_digests = match opts.filter {
+        Some(filter_path) => {
+            let r = std::io::BufReader::new(std::fs::File::open(filter_path)?);
+
+            r.lines().collect::<std::io::Result<HashSet<_>>>()?
+        }
+        None => HashSet::new(),
+    };
 
     let raw_items = match opts.command {
         SubCommand::Query(CdxQuery { query }) => client.search(&query).await?,
@@ -36,6 +47,7 @@ async fn main() -> Result<()> {
             item.url.len() < 80
                 && item.digest != "6ALZFKKMVFADY2U6KXV5DEOLI2PVWFX4" // This is a generic suspension page
                 && item.digest != "3I42H3S6NNFQ2MSVX7XZKYAYSCX5QBYJ" // Another problem page
+                && !filter_digests.contains(&item.digest)
         })
         .collect::<Vec<_>>();
 
@@ -65,6 +77,8 @@ struct Opts {
     /// Number of records to save in parallel
     #[clap(short, long, default_value = "6")]
     parallelism: usize,
+    #[clap(short, long)]
+    filter: Option<String>,
     #[clap(subcommand)]
     command: SubCommand,
 }

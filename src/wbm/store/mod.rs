@@ -1,8 +1,7 @@
 mod map;
 
-use super::item::Item;
+use futures::{join, FutureExt};
 use futures_locks::RwLock;
-use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
 
@@ -14,6 +13,8 @@ pub enum Error {
     InvalidItemCsv(#[from] csv::Error),
     #[error("Invalid mapping file: {path:?}")]
     InvalidMappingFile { path: Box<Path> },
+    #[error("Valid store error: {0:?}")]
+    ValidStoreError(#[from] super::valid::Error),
     #[error("I/O error")]
     IOError(#[from] std::io::Error),
 }
@@ -74,15 +75,195 @@ impl Store {
         })
     }
 
-    pub async fn validate_contents(&self) -> bool {
-        false
+    /// Generate a script for removing items from valid that don't appear in the contents
+    pub async fn clean_valid(&self) -> Result<String> {
+        let contents = self.contents.read().await;
+        let mut good = 0;
+        let mut bad = 0;
+        let mut missing = 0;
+        let mut output = String::new();
+
+        for result in self.valid_store.paths() {
+            let (digest, path) = result?;
+            if !contents.by_digest.contains_key(&digest) {
+                if !self.other_store.contains(&digest) {
+                    let target_path =
+                        self.other_store
+                            .location(&digest)
+                            .ok_or(Error::ValidStoreError(super::valid::Error::InvalidDigest(
+                                digest,
+                            )))?;
+                    output.push_str(&format!(
+                        "mv {} {}\n",
+                        path.as_os_str().to_string_lossy(),
+                        target_path.as_os_str().to_string_lossy()
+                    ));
+                    missing += 1;
+                } else {
+                    output.push_str(&format!("rm {}\n", path.as_os_str().to_string_lossy()));
+                    bad += 1;
+                }
+            } else {
+                good += 1;
+            }
+        }
+
+        log::info!("Checking valid for representation in contents");
+        log::info!("* No action needed: {}", good);
+        log::info!("* Deletion needed: {}", bad);
+        log::info!("* Move to other needed: {}", missing);
+
+        Ok(output)
+    }
+
+    /// Generate a script for removing items from other that also appear in valid
+    pub async fn clean_other(&self) -> Result<String> {
+        let mut good = 0;
+        let mut bad = 0;
+        let mut output = String::new();
+
+        for result in self.other_store.paths() {
+            let (digest, path) = result?;
+
+            if self.valid_store.contains(&digest) {
+                output.push_str(&format!("rm {}\n", path.as_os_str().to_string_lossy()));
+                bad += 1;
+            } else {
+                good += 1;
+            }
+        }
+
+        log::info!("Checking other for duplicates with valid");
+        log::info!("* No action needed: {}", good);
+        log::info!("* Deletion needed: {}", bad);
+
+        Ok(output)
+    }
+
+    pub async fn validate_contents(&self) -> Result<Vec<String>> {
+        let contents_map = &self.contents.read().await.by_digest;
+        let invalid_map = &self.invalid.read().await.by_digest;
+        let mut valid = 0;
+        let mut invalid = 0;
+        let mut missing = 0;
+        let mut output = vec![];
+
+        for digest in contents_map.keys() {
+            if self.valid_store.contains(&digest) {
+                valid += 1;
+            } else if invalid_map.contains_key(digest) {
+                invalid += 1;
+            } else {
+                println!("{}", digest);
+                output.push(digest.clone());
+                missing += 1;
+            }
+        }
+
+        log::info!("Checking contents for missing items");
+        log::info!("* Valid: {}", valid);
+        log::info!("* Invalid: {}", invalid);
+        log::info!("* Missing: {}", missing);
+
+        Ok(output)
+    }
+
+    pub async fn validate_redirect_contents(&self) -> Result<Vec<String>> {
+        let contents_map = &self.contents.read().await.by_digest;
+        let redirect_map = &self.redirect.read().await.by_digest;
+        let mut valid = 0;
+        let mut output = vec![];
+
+        for (digest, items) in contents_map {
+            if items.iter().any(|item| item.status == Some(302)) {
+                if redirect_map.contains_key(digest) {
+                    valid += 1;
+                } else {
+                    output.push(digest.clone());
+                }
+            }
+        }
+
+        log::info!("Checking redirects for missing items");
+        log::info!("* Valid: {}", valid);
+        log::info!("* Missing: {}", output.len());
+
+        Ok(output)
+    }
+
+    pub async fn validate_redirects(&self) -> Result<Vec<String>> {
+        let mut redirect_values = self
+            .redirect
+            .read()
+            .await
+            .by_digest
+            .values()
+            .cloned()
+            .collect::<Vec<String>>();
+        redirect_values.sort();
+        redirect_values.dedup();
+
+        let mut valid = 0;
+        let mut other = 0;
+        let mut output = vec![];
+
+        for digest in redirect_values {
+            if self.valid_store.contains(&digest) {
+                valid += 1;
+            } else if self.other_store.contains(&digest) {
+                other += 1;
+            } else {
+                output.push(digest.clone());
+            }
+        }
+
+        log::info!("Checking for missing redirect values");
+        log::info!("* Valid: {}", valid);
+        log::info!("* Other: {}", other);
+        log::info!("* Missing: {}", output.len());
+
+        Ok(output)
+    }
+
+    pub async fn validate_invalids(&self) -> Result<Vec<String>> {
+        let mut invalid_values = self
+            .invalid
+            .read()
+            .await
+            .by_digest
+            .values()
+            .cloned()
+            .collect::<Vec<String>>();
+        invalid_values.sort();
+        invalid_values.dedup();
+
+        let mut valid = 0;
+        let mut other = 0;
+        let mut output = vec![];
+
+        for digest in invalid_values {
+            if self.valid_store.contains(&digest) {
+                valid += 1;
+            } else if self.other_store.contains(&digest) {
+                other += 1;
+            } else {
+                output.push(digest.clone());
+            }
+        }
+
+        log::info!("Checking for missing invalid values");
+        log::info!("* Valid: {}", valid);
+        log::info!("* Other: {}", other);
+        log::info!("* Missing: {}", output.len());
+
+        Ok(output)
     }
 
     pub async fn sizes(&self) -> (usize, usize, usize) {
-        (
-            self.contents.read().await.by_digest.len(),
-            self.invalid.read().await.by_digest.len(),
-            self.redirect.read().await.by_digest.len(),
+        join!(
+            self.contents.read().map(|v| v.by_digest.len()),
+            self.invalid.read().map(|v| v.by_digest.len()),
+            self.redirect.read().map(|v| v.by_digest.len()),
         )
     }
 }

@@ -92,6 +92,7 @@ async fn main() -> Void {
                         let mut file = std::fs::File::open(entry.path())?;
                         match digest::compute_digest_gz(&mut file) {
                             Ok(digest) => {
+                                println!("{},{}", name, digest);
                                 std::fs::copy(
                                     entry.path(),
                                     out_path.join(format!("{}.gz", digest)),
@@ -146,9 +147,29 @@ async fn main() -> Void {
             downloader.save_all(&results).await?;
         }
         SubCommand::Validate { dir } => {
-            let s = wbm::store::Store::load(dir)?;
+            let store = wbm::store::Store::load(dir)?;
 
-            println!("{:?}", s.sizes().await);
+            store.clean_valid().await?;
+            store.clean_other().await?;
+            let missing_contents = store.validate_contents().await?;
+            let missing_redirect_contents = store.validate_redirect_contents().await?;
+            store.validate_redirects().await?;
+            store.validate_invalids().await?;
+
+            /*for digest in missing_contents {
+                println!("{}", digest);
+            }
+            println!("--------");
+
+            for digest in missing_redirect_contents {
+                println!("{}", digest);
+            }*/
+        }
+        SubCommand::SaveTweets { db, store } => {
+            let tweet_store = wbm::tweet::db::TweetStore::new(db, false)?;
+            let valid_store = valid::ValidStore::new(store);
+
+            wbm::tweet::export_tweets(&valid_store, &tweet_store).await?;
         }
     }
 
@@ -241,5 +262,13 @@ enum SubCommand {
         /// The base directory
         #[clap(short, long)]
         dir: String,
+    },
+    SaveTweets {
+        /// The database file
+        #[clap(short, long)]
+        db: String,
+        /// The base directory
+        #[clap(short, long)]
+        store: String,
     },
 }

@@ -1,5 +1,5 @@
 use super::{super::item::Item, Error, Result};
-use csv::{ReaderBuilder, WriterBuilder};
+use csv::ReaderBuilder;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader};
@@ -29,7 +29,7 @@ impl ItemFileMap {
                             row.get(3),
                             row.get(4),
                         )
-                        .map_err(|error| Error::InvalidItem(error))
+                        .map_err(Error::InvalidItem)
                     })
                 })
                 .collect::<Result<Vec<Item>>>()?
@@ -91,7 +91,7 @@ impl MappingFileMap {
                 .lines()
                 .map(|result| {
                     let line = result?;
-                    let mut fields = line.split(",");
+                    let mut fields = line.split(',');
 
                     let (first, second) = fields.next().zip(fields.next()).ok_or_else(|| {
                         Error::InvalidMappingFile {

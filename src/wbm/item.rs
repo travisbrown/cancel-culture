@@ -111,6 +111,7 @@ impl Item {
         )
     }
 
+    /*
     fn from_row(row: &[String]) -> Result<Item, Error> {
         if row.len() != 5 {
             Err(Error::ItemParsingError(format!(
@@ -121,4 +122,5 @@ impl Item {
             Item::parse(&row[0], &row[1], &row[2], &row[3], &row[4])
         }
     }
+    */
 }

@@ -434,6 +434,7 @@ async fn main() -> Result<()> {
                 println!("{}", report);
 
                 for (id, (tweet, item)) in report_items_vec {
+                    log::error!("time: {:?}", tweet.time);
                     let time = tweet.time.format("%e %B %Y");
 
                     if *deleted_status.get(id).unwrap_or(&false) {

@@ -13,41 +13,51 @@ use std::io::Read;
 #[derive(Debug, Eq, PartialEq, Serialize)]
 pub struct BrowserTweet {
     pub id: u64,
+    pub parent_id: Option<u64>,
     pub time: DateTime<Utc>,
     pub user_id: u64,
     pub user_screen_name: String,
+    pub user_name: String,
     pub text: String,
 }
 
 impl BrowserTweet {
     pub fn new(
         id: u64,
+        parent_id: Option<u64>,
         time: DateTime<Utc>,
         user_id: u64,
         user_screen_name: String,
+        user_name: String,
         text: String,
     ) -> BrowserTweet {
         BrowserTweet {
             id,
+            parent_id,
             time,
             user_id,
             user_screen_name,
+            user_name,
             text,
         }
     }
 
     fn new_with_timestamp(
         id: u64,
+        parent_id: Option<u64>,
         timestamp: i64,
         user_id: u64,
         user_screen_name: String,
+        user_name: String,
         text: String,
     ) -> BrowserTweet {
         Self::new(
             id,
+            parent_id,
             Utc.timestamp_millis(timestamp),
             user_id,
             user_screen_name,
+            user_name,
             text,
         )
     }
@@ -57,6 +67,7 @@ impl BrowserTweet {
 struct TweetUserJson {
     id: u64,
     screen_name: String,
+    name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +78,7 @@ struct ExtendedTweetJson {
 #[derive(Debug, Deserialize)]
 struct TweetJson {
     id: u64,
+    in_reply_to_status_id: Option<u64>,
     timestamp_ms: String,
     user: TweetUserJson,
     text: String,
@@ -77,12 +89,15 @@ impl TweetJson {
     fn into_browser_tweet(self) -> BrowserTweet {
         BrowserTweet::new_with_timestamp(
             self.id,
+            self.in_reply_to_status_id,
             self.timestamp_ms
                 .parse::<i64>()
                 .expect("Invalid timestamp_ms value"),
             self.user.id,
             self.user.screen_name,
-            self.extended_tweet.map_or(self.text, |et| et.full_text),
+            self.user.name,
+            self.extended_tweet
+                .map_or(self.text, |extended| extended.full_text),
         )
     }
 }
@@ -93,6 +108,8 @@ lazy_static! {
     static ref TWEET_DIV_SEL: Selector = Selector::parse("div.tweet").unwrap();
     static ref DESCRIPTION_SEL: Selector =
         Selector::parse("meta[property='og:description']").unwrap();
+    static ref CANONICAL_SEL: Selector = Selector::parse("link[rel='canonical']").unwrap();
+    static ref STATUS_ID_RE: regex::Regex = regex::Regex::new(r"/status/(\d+)$").unwrap();
 }
 
 pub fn parse_html<R: Read>(input: &mut R) -> Result<Html, std::io::Error> {
@@ -115,6 +132,20 @@ pub fn extract_description(doc: &Html) -> Option<String> {
     res.into_iter().next()
 }
 
+pub fn extract_canonical_status_id(doc: &Html) -> Option<u64> {
+    doc.select(&CANONICAL_SEL)
+        .filter_map(|el| {
+            el.value().attr("href").and_then(|href| {
+                STATUS_ID_RE.captures(href).and_then(|captures| {
+                    captures
+                        .get(1)
+                        .and_then(|capture| capture.as_str().parse::<u64>().ok())
+                })
+            })
+        })
+        .next()
+}
+
 pub fn extract_tweets(doc: &Html) -> Vec<BrowserTweet> {
     doc.select(&TWEET_DIV_SEL)
         .filter_map(|el| extract_div_tweet(&el))
@@ -132,13 +163,17 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
     let id = element
         .attr("data-tweet-id")
         .and_then(|v| v.parse::<u64>().ok());
+    let parent_id = element
+        .attr("data-conversation-id")
+        .and_then(|v| v.parse::<u64>().ok());
     let user_id = element
         .attr("data-user-id")
         .and_then(|v| v.parse::<u64>().ok());
     let user_screen_name = element.attr("data-screen-name");
+    let user_name = element.attr("data-name");
     let timestamp = element_ref.select(&TIME_SEL).next().and_then(|el| {
         el.value()
-            .attr("data-time")
+            .attr("data-time-ms")
             .and_then(|v| v.parse::<i64>().ok())
     });
     let text = element_ref.select(&TEXT_SEL).next().map(|el| {
@@ -159,12 +194,16 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
                             .unwrap()
                             .text()
                             .map(|t| t.trim())
-                            .filter(|v| !v.is_empty() && !v.starts_with("pic.twitter.com"))
+                            .filter(|v| !v.is_empty()) // && !v.starts_with("pic.twitter.com"))
                             .collect::<Vec<_>>()
                             .join("");
 
                         if !text.starts_with("http") {
+                            result.push(' ');
                             result.push_str(&text);
+                            result.push(' ');
+                        } else if let Some(url) = child_el.attr("data-expanded-url") {
+                            result.push_str(&format!(" {} ", url));
                         }
                     }
                 }
@@ -172,20 +211,30 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
             }
         }
 
-        result
+        result.trim().to_string()
     });
 
     id.zip(user_id)
+        .zip(parent_id)
         .zip(user_screen_name)
+        .zip(user_name)
         .zip(timestamp)
         .zip(text)
         .map(
-            |((((id, user_id), user_screen_name), timestamp), text)| BrowserTweet {
-                id,
-                time: Utc.timestamp(timestamp, 0),
-                user_id,
-                user_screen_name: user_screen_name.to_string(),
-                text,
+            |((((((id, user_id), parent_id), user_screen_name), user_name), timestamp), text)| {
+                BrowserTweet::new_with_timestamp(
+                    id,
+                    if parent_id == id {
+                        None
+                    } else {
+                        Some(parent_id)
+                    },
+                    timestamp,
+                    user_id,
+                    user_screen_name.trim().to_string(),
+                    user_name.trim().to_string(),
+                    text,
+                )
             },
         )
 }
@@ -197,6 +246,22 @@ mod tests {
     use scraper::Html;
     use std::fs::{read_to_string, File};
     use std::io::Read;
+
+    #[test]
+    fn extract_canonical_status_id() {
+        let file = File::open("examples/wayback/53SGIJNJMTP6S626CVRCHFTX3OEWXB3E.gz").unwrap();
+        let mut gz = GzDecoder::new(file);
+        let mut html = String::new();
+
+        gz.read_to_string(&mut html).unwrap();
+
+        let doc = Html::parse_document(&html);
+
+        assert_eq!(
+            super::extract_canonical_status_id(&doc),
+            Some(1170761943067631621)
+        );
+    }
 
     #[test]
     fn extract_tweets() {
@@ -218,16 +283,18 @@ mod tests {
     #[test]
     fn extract_tweets_json() {
         let contents = read_to_string("examples/json/890659426796945408.json").unwrap();
-        let expected = super::BrowserTweet {
-            id: 890659426796945408,
-            time: Utc.timestamp_millis(1501184729657),
-            user_id: 849768899772133376,
-            user_screen_name: "DrupalLeaks".to_string(),
-            text: "Whose secrets should we cover in Part 2 of our documentary series, \
+        let expected = super::BrowserTweet::new(
+            890659426796945408,
+            None,
+            Utc.timestamp_millis(1501184729657),
+            849768899772133376,
+            "DrupalLeaks".to_string(),
+            "DrupalLeaks".to_string(),
+            "Whose secrets should we cover in Part 2 of our documentary series, \
                    The Dark Secrets of Drupal? Or perhaps some other #DrupalElite? \
                    Speak up!"
                 .to_string(),
-        };
+        );
 
         assert_eq!(super::extract_tweet_json(&contents), Some(expected));
     }

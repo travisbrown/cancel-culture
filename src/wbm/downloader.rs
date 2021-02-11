@@ -1,14 +1,10 @@
 use super::super::wayback::Item;
 use super::valid::ValidStore;
 use bytes::Bytes;
-use flate2::{Compression, GzBuilder};
-use futures::{Future, FutureExt, StreamExt, TryStreamExt};
-use log::info;
 use reqwest::{redirect, Client};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Read, Write};
-use std::ops::Deref;
+use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use thiserror::Error;
@@ -125,7 +121,7 @@ impl Downloader {
                 }
 
                 if self.redirect_mappings.contains_key(&item.digest) {
-                    known_invalid_count += 1;
+                    known_redirect_count += 1;
                     in_mapping = true;
                 }
 
@@ -197,7 +193,7 @@ impl Downloader {
             .lines()
             .map(|result| {
                 let line = result?;
-                let mut fields = line.split(",");
+                let mut fields = line.split(',');
 
                 let (first, second) =
                     fields

@@ -190,20 +190,18 @@ async fn main() -> Result<()> {
                 if !item.url.to_lowercase().contains("cernovich")
                     && !item.url.to_lowercase().contains("chiefscientist")
                     && !known_digests.contains(&item.digest)
+                    && item.digest != "6Q4HKTYOVX4E7HQUF6TXAC4UUG2M227A"
+                    && item.digest != "ZBWFUJ2IKMYHPV6ER3CUG6F7GTDKSGVE"
                 {
-                    if item.digest != "6Q4HKTYOVX4E7HQUF6TXAC4UUG2M227A"
-                        && item.digest != "ZBWFUJ2IKMYHPV6ER3CUG6F7GTDKSGVE"
-                    {
-                        let existence_check = std::path::Path::new(&base)
-                            .join("good")
-                            .join(format!("{}.gz", item.digest));
-                        if !existence_check.exists() {
-                            match client.download_gz_to_dir(&base, &item).await {
-                                Ok(_) => {
-                                    known_digests.insert(item.digest);
-                                }
-                                Err(err) => log::error!("Problem: {:?}", err),
+                    let existence_check = std::path::Path::new(&base)
+                        .join("good")
+                        .join(format!("{}.gz", item.digest));
+                    if !existence_check.exists() {
+                        match client.download_gz_to_dir(&base, &item).await {
+                            Ok(_) => {
+                                known_digests.insert(item.digest);
                             }
+                            Err(err) => log::error!("Problem: {:?}", err),
                         }
                     }
                 }
@@ -261,21 +259,19 @@ async fn main() -> Result<()> {
                             if guess_digest == item.digest {
                                 save_contents_gz(&item, &base, new_content.as_bytes())?;
                             }
-                        } else {
-                            if let Some(canonical_match) =
-                                fallback_re.captures_iter(&content).next()
-                            {
-                                let new_content = format!(
-                              "<html><body>You are being <a href=\"{}\">redirected</a>.</body></html>",
-                              canonical_match.get(1).unwrap().as_str()
-                            );
-                                let mut ncb = new_content.as_bytes();
+                        } else if let Some(canonical_match) =
+                            fallback_re.captures_iter(&content).next()
+                        {
+                            let new_content = format!(
+                                    "<html><body>You are being <a href=\"{}\">redirected</a>.</body></html>",
+                                    canonical_match.get(1).unwrap().as_str()
+                                );
+                            let mut ncb = new_content.as_bytes();
 
-                                let guess_digest = Store::compute_digest(&mut ncb)?;
+                            let guess_digest = Store::compute_digest(&mut ncb)?;
 
-                                if guess_digest == item.digest {
-                                    save_contents_gz(&item, &base, new_content.as_bytes())?;
-                                }
+                            if guess_digest == item.digest {
+                                save_contents_gz(&item, &base, new_content.as_bytes())?;
                             }
                         }
                     }

@@ -397,20 +397,23 @@ impl Store {
 
         for item in selected {
             let path = self.data_path(&item.digest);
-            let file = File::open(path)?;
-            let mut gz = GzDecoder::new(file);
-            let mut buffer = vec![];
-            gz.read_to_end(&mut buffer)?;
+            if let Ok(file) = File::open(path) {
+                let mut gz = GzDecoder::new(file);
+                let mut buffer = vec![];
+                gz.read_to_end(&mut buffer)?;
 
-            let mut header = tar::Header::new_gnu();
-            header.set_metadata_in_mode(&metadata, tar::HeaderMode::Deterministic);
-            header.set_size(buffer.len() as u64);
+                let mut header = tar::Header::new_gnu();
+                header.set_metadata_in_mode(&metadata, tar::HeaderMode::Deterministic);
+                header.set_size(buffer.len() as u64);
 
-            archive.append_data(
-                &mut header,
-                format!("{}/data/{}", name, item.digest),
-                &*buffer,
-            )?;
+                archive.append_data(
+                    &mut header,
+                    format!("{}/data/{}", name, item.digest),
+                    &*buffer,
+                )?;
+            } else {
+                log::error!("Failure for item {}", item.digest);
+            }
         }
 
         Ok(())

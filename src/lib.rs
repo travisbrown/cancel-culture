@@ -1,3 +1,4 @@
+#![feature(option_result_contains)]
 #![feature(test)]
 
 #[macro_use]
@@ -7,5 +8,6 @@ pub mod browser;
 pub mod cli;
 pub mod reports;
 pub mod twitter;
+pub mod util;
 pub mod wayback;
 pub mod wbm;

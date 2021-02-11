@@ -16,6 +16,8 @@ pub enum Error {
     InvalidDigest(String),
     #[error("I/O error")]
     IOError(#[from] io::Error),
+    #[error("I/O error for {digest}: {error:?}")]
+    ItemIOError { digest: String, error: io::Error },
     #[error("Unexpected error while computing digests")]
     DigestComputationError,
 }
@@ -63,12 +65,16 @@ impl ValidStore {
             .map_ok(|(expected, path)| {
                 tokio::spawn(async {
                     let mut file = File::open(path)?;
-                    let actual = super::digest::compute_digest_gz(&mut file)?;
-
-                    Ok((expected, actual))
+                    match super::digest::compute_digest_gz(&mut file) {
+                        Ok(actual) => Ok((expected, actual)),
+                        Err(error) => Err(Error::ItemIOError {
+                            digest: expected,
+                            error,
+                        }),
+                    }
                 })
                 .map(|result| match result {
-                    Ok(Err(e)) => Err(e),
+                    Ok(Err(error)) => Err(error),
                     Ok(Ok(value)) => Ok(value),
                     Err(_) => Err(Error::DigestComputationError),
                 })
