@@ -5,3 +5,5 @@ rusty-tags.vi
 /tmp
 keys.toml
 twitter.db
+.metals
+.vscode
