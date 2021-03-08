@@ -6,8 +6,9 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 pub(super) struct ItemFileMap {
-    pub(super) by_url: HashMap<String, Vec<Item>>,
-    pub(super) by_digest: HashMap<String, Vec<Item>>,
+    pub(super) items: Vec<Item>,
+    by_url: HashMap<String, Vec<usize>>,
+    by_digest: HashMap<String, Vec<usize>>,
     pub(super) file: File,
 }
 
@@ -40,40 +41,87 @@ impl ItemFileMap {
         let mut by_url = HashMap::new();
         let mut by_digest = HashMap::new();
 
-        for item in items {
-            Self::add_item_by_url(&mut by_url, item.clone());
-            Self::add_item_by_digest(&mut by_digest, item);
+        for (index, item) in items.iter().enumerate() {
+            Self::add_item_by_url(&mut by_url, &item, index);
+            Self::add_item_by_digest(&mut by_digest, &item, index);
         }
 
         let file = OpenOptions::new().append(true).create(true).open(path)?;
 
         Ok(ItemFileMap {
+            items,
             by_url,
             by_digest,
             file,
         })
     }
 
-    fn add_item_by_url(map: &mut HashMap<String, Vec<Item>>, item: Item) {
+    pub(super) fn digests(&self) -> impl Iterator<Item = &String> {
+        self.by_digest.keys()
+    }
+
+    pub(super) fn contains_digest(&self, value: &str) -> bool {
+        self.by_digest.contains_key(value)
+    }
+
+    pub(super) fn items_by_url(&self, value: &str) -> Vec<&Item> {
+        self.by_url
+            .get(value)
+            .map(|indices| {
+                indices
+                    .iter()
+                    .filter_map(|index| self.items.get(*index))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub(super) fn items_by_digest(&self, value: &str) -> Vec<&Item> {
+        self.by_digest
+            .get(value)
+            .map(|indices| {
+                indices
+                    .iter()
+                    .filter_map(|index| self.items.get(*index))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn add_item_by_url(map: &mut HashMap<String, Vec<usize>>, item: &Item, index: usize) {
         match map.get_mut(&item.url) {
             Some(url_items) => {
-                url_items.push(item);
+                url_items.push(index);
             }
             None => {
-                map.insert(item.url.clone(), vec![item]);
+                map.insert(item.url.clone(), vec![index]);
             }
         }
     }
 
-    fn add_item_by_digest(map: &mut HashMap<String, Vec<Item>>, item: Item) {
+    fn add_item_by_digest(map: &mut HashMap<String, Vec<usize>>, item: &Item, index: usize) {
         match map.get_mut(&item.digest) {
             Some(digest_items) => {
-                digest_items.push(item);
+                digest_items.push(index);
             }
             None => {
-                map.insert(item.digest.clone(), vec![item]);
+                map.insert(item.digest.clone(), vec![index]);
             }
         }
+    }
+
+    pub fn filter<F: Fn(&Item) -> bool>(&self, pred: F) -> Vec<&Item> {
+        let mut selected = vec![];
+
+        for item in &self.items {
+            if pred(item) {
+                selected.push(item);
+            }
+        }
+
+        selected.sort_by_key(|item| item.url.to_string());
+
+        selected
     }
 }
 

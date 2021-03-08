@@ -1,6 +1,9 @@
 use cancel_culture::{cli, wbm, wbm::digest, wbm::valid};
 use clap::{crate_authors, crate_version, Clap};
 use futures::StreamExt;
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
@@ -171,6 +174,33 @@ async fn main() -> Void {
 
             wbm::tweet::export_tweets(&valid_store, &tweet_store).await?;
         }
+        SubCommand::Retweets { dir, known } => {
+            let mut known_retweet_status_ids = HashSet::new();
+
+            if let Some(path) = known {
+                let file = File::open(path)?;
+                let reader = BufReader::new(file);
+                for result in reader.lines() {
+                    let line = result?;
+                    let fields = line.split(',').collect::<Vec<_>>();
+                    if let Some(id) = fields.get(2) {
+                        known_retweet_status_ids.insert(id.parse::<u64>()?);
+                    }
+                }
+            }
+            log::info!("Read {} known retweets", known_retweet_status_ids.len());
+
+            let store = wbm::store::Store::load(dir)?;
+            log::info!("Loaded store");
+
+            let result = store.extract_retweets(known_retweet_status_ids).await;
+            for ((retweeter, retweet_status_id), (tweeter, tweet_status_id)) in result {
+                println!(
+                    "{},{},{},{}",
+                    retweeter, tweeter, retweet_status_id, tweet_status_id
+                );
+            }
+        }
     }
 
     Ok(())
@@ -270,5 +300,13 @@ enum SubCommand {
         /// The base directory
         #[clap(short, long)]
         store: String,
+    },
+    Retweets {
+        /// The base directory
+        #[clap(short, long)]
+        dir: String,
+        /// Known retweets file
+        #[clap(short, long)]
+        known: Option<String>,
     },
 }

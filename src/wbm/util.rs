@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 const TWEET_URL_PATTERN: &str = r"^http[s]?://twitter\.com/([^/]+)/status/(\d+)(?:\?.+)?$";
-const TWEET_REDIRECT_HTML_PATTERN: &str = r#"^<html><body>You are being <a href="https://twitter.com/([^/]+)/status/(\d+)(?:\?.+)?">redirected</a>.</body></html>$"#;
+const TWEET_REDIRECT_HTML_PATTERN: &str = r#"^<html><body>You are being <a href="http[s]?://twitter\.com/([^/]+)/status/(\d+)(?:\?.+)?">redirected</a>\.</body></html>$"#;
 
 pub fn parse_tweet_url(url: &str) -> Option<(String, u64)> {
     lazy_static! {
