@@ -14,7 +14,7 @@ cache:
 
 lint:rustfmt:
   stage: lint
-  image: rust:latest
+  image: rustlang/rust:nightly
   before_script:
     - rustup component add rustfmt
   script:
@@ -22,7 +22,7 @@ lint:rustfmt:
 
 build:rust-latest:
   stage: build
-  image: rust:latest
+  image: rustlang/rust:nightly
   before_script:    
     - cargo install cargo-tarpaulin
   script:
@@ -32,11 +32,3 @@ build:rust-latest:
   artifacts:
     paths:
       - target/tarpaulin/coverage.json
-
-build:rust-nightly:
-  stage: build
-  image: rustlang/rust:nightly
-  script:
-    - cargo build --verbose
-    - cargo test --verbose
-  allow_failure: true
