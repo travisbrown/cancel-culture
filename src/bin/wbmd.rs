@@ -174,6 +174,30 @@ async fn main() -> Void {
 
             wbm::tweet::export_tweets(&valid_store, &tweet_store).await?;
         }
+        SubCommand::Get { db } => {
+            let status_ids = cli::read_stdin()?
+                .lines()
+                .map(|line| line.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let tweet_store = wbm::tweet::db::TweetStore::new(db, false)?;
+            let mut results = tweet_store.get_tweet(&status_ids).await?;
+            results.sort_by_key(|(tweet, _)| (tweet.user_screen_name.to_lowercase(), tweet.id));
+
+            let mut out = csv::WriterBuilder::new().from_writer(std::io::stdout());
+            let space_re = regex::Regex::new(r" +").unwrap();
+
+            for (tweet, digest) in results {
+                out.write_record(&[
+                    tweet.user_screen_name,
+                    tweet.id.to_string(),
+                    digest,
+                    space_re
+                        .replace_all(&tweet.text.trim().replace("\n", "\\n"), " ")
+                        .to_string(),
+                ])?;
+            }
+        }
         SubCommand::Retweets { dir, known } => {
             let mut known_retweet_status_ids = HashSet::new();
 
@@ -308,5 +332,10 @@ enum SubCommand {
         /// Known retweets file
         #[clap(short, long)]
         known: Option<String>,
+    },
+    Get {
+        /// The database file
+        #[clap(short, long)]
+        db: String,
     },
 }
