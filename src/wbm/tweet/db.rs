@@ -38,6 +38,14 @@ const TWEET_INSERT: &str =
 const TWEET_FILE_INSERT: &str =
     "INSERT INTO tweet_file (tweet_id, file_id, user_id) VALUES (?, ?, ?)";
 
+const USER_SELECT_ALL: &str = "
+    SELECT user.twitter_id, tweet.ts, user.screen_name, user.name
+        FROM user
+        FROM tweet ON tweet.id = (
+            SELECT id FROM tweet WHERE tweet.user_twitter_id = user.twitter_id ORDER BY ts DESC LIMIT 1
+        )
+";
+
 pub type TweetStoreResult<T> = Result<T, TweetStoreError>;
 
 #[derive(Error, Debug)]
@@ -46,6 +54,14 @@ pub enum TweetStoreError {
     FileMissing(#[from] std::io::Error),
     #[error("SQLite error for TweetStore")]
     DbFailure(#[from] rusqlite::Error),
+}
+
+#[derive(Debug)]
+pub struct UserRecord {
+    id: u64,
+    last_seen: u64,
+    screen_names: Vec<String>,
+    names: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -217,6 +233,49 @@ impl TweetStore {
 
         Ok(result)
     }
+
+    /*pub async fn get_tweet(
+        &self,
+        status_ids: &[u64],
+    ) -> TweetStoreResult<Vec<(BrowserTweet, String)>> {
+        let connection = self.connection.read().await;
+        let mut select = connection.prepare_cached(TWEET_SELECT_BY_ID)?;
+        let mut result = Vec::with_capacity(status_ids.len());
+
+        for id in status_ids {
+            match select.query_row(params![SQLiteId(*id)], |row| {
+                let parent_twitter_id = row.get::<usize, i64>(0)? as u64;
+                let ts: SQLiteDateTime = row.get(1)?;
+                let user_twitter_id = row.get::<usize, i64>(2)? as u64;
+                let screen_name: String = row.get(3)?;
+                let name: String = row.get(4)?;
+                let content: String = row.get(5)?;
+                let digest: String = row.get(6)?;
+
+                Ok((
+                    BrowserTweet::new(
+                        *id,
+                        if parent_twitter_id == *id {
+                            None
+                        } else {
+                            Some(parent_twitter_id)
+                        },
+                        ts.0,
+                        user_twitter_id,
+                        screen_name,
+                        name,
+                        content,
+                    ),
+                    digest,
+                ))
+            }) {
+                Ok(pair) => result.push(pair),
+                Err(error) => log::error!("Error for {}: {:?}", id, error),
+            }
+        }
+
+        Ok(result)
+    }*/
 }
 
 /*
