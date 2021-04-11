@@ -1,7 +1,10 @@
 use crate::browser::twitter::parser::BrowserTweet;
 use crate::util::sqlite::{SQLiteDateTime, SQLiteId};
+use chrono::{DateTime, Utc};
 use futures_locks::RwLock;
 use rusqlite::{params, Connection, DropBehavior, OptionalExtension, Transaction};
+use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
 
@@ -38,12 +41,18 @@ const TWEET_INSERT: &str =
 const TWEET_FILE_INSERT: &str =
     "INSERT INTO tweet_file (tweet_id, file_id, user_id) VALUES (?, ?, ?)";
 
-const USER_SELECT_ALL: &str = "
-    SELECT user.twitter_id, tweet.ts, user.screen_name, user.name
+const GET_USER_NAMES: &str = "
+   SELECT screen_name, name
+       FROM user
+       WHERE twitter_id = ?
+";
+
+const GET_USER_KNOWN_ACTIVE_RANGE: &str = "
+    SELECT COUNT(tweet.id), MIN(tweet.ts), MAX(tweet.ts)
         FROM user
-        FROM tweet ON tweet.id = (
-            SELECT id FROM tweet WHERE tweet.user_twitter_id = user.twitter_id ORDER BY ts DESC LIMIT 1
-        )
+        JOIN tweet_file ON tweet_file.user_id = user.id
+        JOIN tweet ON tweet.id = tweet_file.tweet_id AND tweet.user_twitter_id = user.twitter_id
+        WHERE user.twitter_id = ? AND user.screen_name LIKE ?;
 ";
 
 pub type TweetStoreResult<T> = Result<T, TweetStoreError>;
@@ -56,12 +65,41 @@ pub enum TweetStoreError {
     DbFailure(#[from] rusqlite::Error),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct UserRecord {
-    id: u64,
-    last_seen: u64,
-    screen_names: Vec<String>,
-    names: Vec<String>,
+    pub id: u64,
+    pub screen_name: String,
+    pub names: Vec<String>,
+    pub tweet_count: u32,
+    pub first_seen: DateTime<Utc>,
+    pub last_seen: DateTime<Utc>,
+}
+
+impl Ord for UserRecord {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (
+            self.id,
+            self.first_seen,
+            self.last_seen,
+            &self.screen_name,
+            &self.names,
+            self.tweet_count,
+        )
+            .cmp(&(
+                other.id,
+                other.first_seen,
+                other.last_seen,
+                &other.screen_name,
+                &other.names,
+                other.tweet_count,
+            ))
+    }
+}
+
+impl PartialOrd for UserRecord {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Clone)]
@@ -228,6 +266,68 @@ impl TweetStore {
             }) {
                 Ok(pair) => result.push(pair),
                 Err(error) => log::error!("Error for {}: {:?}", id, error),
+            }
+        }
+
+        Ok(result)
+    }
+
+    pub async fn get_users(&self, user_ids: &[u64]) -> TweetStoreResult<Vec<UserRecord>> {
+        let connection = self.connection.read().await;
+        let mut get_user_names = connection.prepare_cached(GET_USER_NAMES)?;
+        let mut get_user_known_active_range =
+            connection.prepare_cached(GET_USER_KNOWN_ACTIVE_RANGE)?;
+        let mut result = Vec::with_capacity(user_ids.len());
+
+        for id in user_ids {
+            let mut name_map = HashMap::<String, Vec<String>>::new();
+
+            if let Err(error) = get_user_names.query_row(params![SQLiteId(*id)], |row| {
+                let screen_name: String = row.get(0)?;
+                let name: String = row.get(1)?;
+
+                if let Some((_, names)) = name_map.iter_mut().find(|(known_screen_name, names)| {
+                    known_screen_name.to_lowercase() == screen_name.to_lowercase()
+                }) {
+                    if !names.contains(&name) {
+                        names.push(name);
+                    }
+                } else {
+                    name_map.insert(screen_name, vec![name]);
+                }
+
+                Ok(())
+            }) {
+                log::error!("Error retrieving user names for {}: {:?}", id, error);
+            }
+
+            for (screen_name, names) in name_map {
+                if let Err(error) = get_user_known_active_range.query_row(
+                    params![SQLiteId(*id), screen_name.clone()],
+                    |row| {
+                        let tweet_count = row.get(0)?;
+                        let first: SQLiteDateTime = row.get(1)?;
+                        let last: SQLiteDateTime = row.get(2)?;
+
+                        result.push(UserRecord {
+                            id: *id,
+                            screen_name: screen_name.clone(),
+                            names,
+                            tweet_count,
+                            first_seen: first.0,
+                            last_seen: last.0,
+                        });
+
+                        Ok(())
+                    },
+                ) {
+                    log::error!(
+                        "Error retrieving user date range for {} ({}): {:?}",
+                        id,
+                        screen_name,
+                        error
+                    );
+                }
             }
         }
 

@@ -19,6 +19,35 @@ async fn main() -> Void {
     let client = Client::from_config_file(&opts.key_file).await?;
 
     match opts.command {
+        SubCommand::UserInfo { db } => {
+            let stdin = std::io::stdin();
+            let mut handle = stdin.lock();
+            let ids = handle
+                .lines()
+                .map(|line| line.ok().and_then(|input| input.parse::<u64>().ok()))
+                .collect::<Option<Vec<u64>>>()
+                .unwrap();
+
+            let store = cancel_culture::wbm::tweet::db::TweetStore::new(db, false)?;
+            let mut results = store.get_users(&ids).await?;
+
+            results.sort();
+
+            let mut writer = csv::Writer::from_writer(std::io::stdout());
+
+            for result in results {
+                let mut record = vec![];
+
+                record.push(result.id.to_string());
+                record.push(result.screen_name);
+                record.push(result.first_seen.format("%Y-%m-%d").to_string());
+                record.push(result.last_seen.format("%Y-%m-%d").to_string());
+                record.push(result.tweet_count.to_string());
+                record.extend(result.names);
+
+                writer.write_record(record);
+            }
+        }
         SubCommand::ScreenNames => {
             let stdin = std::io::stdin();
             let mut handle = stdin.lock();
@@ -97,4 +126,8 @@ struct Opts {
 #[derive(Clap)]
 enum SubCommand {
     ScreenNames,
+    UserInfo {
+        #[clap(long)]
+        db: String,
+    },
 }
