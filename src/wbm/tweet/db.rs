@@ -1,7 +1,7 @@
 use crate::browser::twitter::parser::BrowserTweet;
 use crate::util::sqlite::{SQLiteDateTime, SQLiteId};
 use futures_locks::RwLock;
-use rusqlite::{params, Connection, DropBehavior, OptionalExtension, Transaction, NO_PARAMS};
+use rusqlite::{params, Connection, DropBehavior, OptionalExtension, Transaction};
 use std::path::Path;
 use thiserror::Error;
 
@@ -77,10 +77,10 @@ impl TweetStore {
         if exists {
             if recreate {
                 let tx = connection.transaction()?;
-                tx.execute("DROP TABLE IF EXISTS tweet", NO_PARAMS)?;
-                tx.execute("DROP TABLE IF EXISTS user", NO_PARAMS)?;
-                tx.execute("DROP TABLE IF EXISTS file", NO_PARAMS)?;
-                tx.execute("DROP TABLE IF EXISTS tweet_file", NO_PARAMS)?;
+                tx.execute("DROP TABLE IF EXISTS tweet", [])?;
+                tx.execute("DROP TABLE IF EXISTS user", [])?;
+                tx.execute("DROP TABLE IF EXISTS file", [])?;
+                tx.execute("DROP TABLE IF EXISTS tweet_file", [])?;
                 let schema = Self::load_schema()?;
                 tx.execute_batch(&schema)?;
                 tx.commit()?;
@@ -307,7 +307,7 @@ const TWEET_SELECT_WITH_DIGEST: &str = "
         let connection = self.connection.read().await;
         let mut select = connection.prepare(DIGEST_SELECT)?;
         let row = select
-            .query_map(NO_PARAMS, |row| row.get(0))?
+            .query_map([], |row| row.get(0))?
             .collect::<Result<HashSet<String>, rusqlite::Error>>()?;
         Ok(row)
     }
