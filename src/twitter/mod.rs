@@ -71,7 +71,9 @@ impl Client {
     }
 
     pub async fn from_config_file<P: AsRef<Path>>(path: P) -> Result<Client> {
-        let contents = fs::read_to_string(path)?;
+        let path = path.as_ref().to_path_buf();
+        let contents =
+            fs::read_to_string(path.clone()).map_err(|e| Error::ConfigReadError(e, path))?;
         let config = toml::from_str::<config::Config>(&contents)?;
         let (consumer, access) = config.twitter_key_pairs();
 

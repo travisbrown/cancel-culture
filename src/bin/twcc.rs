@@ -102,7 +102,9 @@ async fn main() -> Result<()> {
             let stdin = std::io::stdin();
             let mut buffer = String::new();
             let mut handle = stdin.lock();
-            handle.read_to_string(&mut buffer)?;
+            handle
+                .read_to_string(&mut buffer)
+                .map_err(|e| Error::StdinError(e))?;
 
             let ids = buffer
                 .split_whitespace()
@@ -258,7 +260,9 @@ async fn main() -> Result<()> {
             let stdin = std::io::stdin();
             let mut buffer = String::new();
             let mut handle = stdin.lock();
-            handle.read_to_string(&mut buffer)?;
+            handle
+                .read_to_string(&mut buffer)
+                .map_err(|e| Error::StdinError(e))?;
 
             let ids = buffer
                 .split_whitespace()
