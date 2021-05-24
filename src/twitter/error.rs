@@ -1,59 +1,37 @@
-use std::fmt::{Debug, Display, Formatter};
+use displaydoc::Display;
+use thiserror::Error;
 
-#[derive(Debug)]
+use std::fmt;
+use std::path::PathBuf;
+
+#[derive(Error, Display)]
 pub enum Error {
-    ConfigParseError(toml::de::Error),
-    ConfigReadError(std::io::Error),
-    ApiError(egg_mode::error::Error),
-    BrowserError(fantoccini::error::CmdError),
-    HttpClientError(reqwest::Error),
-    WaybackClientError(crate::wayback::Error),
+    /// failed to parse config file contents: {0}
+    ConfigParseError(#[from] toml::de::Error),
+    /// failed to read config file from {1}: {0}
+    ConfigReadError(#[source] std::io::Error, PathBuf),
+    /// failure to read from stdin: {0}
+    StdinError(#[source] std::io::Error),
+    /// a twitter API call failed: {0}
+    ApiError(#[from] egg_mode::error::Error),
+    /// an failure occurred when operating the headless browser: {0}
+    BrowserError(#[from] fantoccini::error::CmdError),
+    /// an error occurred in the http client: {0}
+    HttpClientError(#[from] reqwest::Error),
+    /// an error occurred when piloting the wayback machine subcrate: {0}
+    WaybackClientError(#[from] crate::wayback::Error),
+    /// a failure occurred when parsing a tweet id string: {0}
     TweetIDParseError(String),
+    /// the tweet ID {0}, which was supposed to be a reply, was not a reply
     NotReplyError(u64),
+    /// the user with ID {0} was not found
     MissingUserError(u64),
+    /// the provided token could not be used: {0:?}
     UnsupportedTokenMethod(super::Method),
 }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        Debug::fmt(self, f)
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<toml::de::Error> for Error {
-    fn from(e: toml::de::Error) -> Self {
-        Error::ConfigParseError(e)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Error::ConfigReadError(e)
-    }
-}
-
-impl From<egg_mode::error::Error> for Error {
-    fn from(e: egg_mode::error::Error) -> Self {
-        Error::ApiError(e)
-    }
-}
-
-impl From<fantoccini::error::CmdError> for Error {
-    fn from(e: fantoccini::error::CmdError) -> Self {
-        Error::BrowserError(e)
-    }
-}
-
-impl From<reqwest::Error> for Error {
-    fn from(e: reqwest::Error) -> Self {
-        Error::HttpClientError(e)
-    }
-}
-
-impl From<crate::wayback::Error> for Error {
-    fn from(e: crate::wayback::Error) -> Self {
-        Error::WaybackClientError(e)
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(self, f)
     }
 }
