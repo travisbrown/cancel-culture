@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
             let mut handle = stdin.lock();
             handle
                 .read_to_string(&mut buffer)
-                .map_err(|e| Error::StdinError(e))?;
+                .map_err(Error::StdinError)?;
 
             let ids = buffer
                 .split_whitespace()
@@ -262,7 +262,7 @@ async fn main() -> Result<()> {
             let mut handle = stdin.lock();
             handle
                 .read_to_string(&mut buffer)
-                .map_err(|e| Error::StdinError(e))?;
+                .map_err(Error::StdinError)?;
 
             let ids = buffer
                 .split_whitespace()
