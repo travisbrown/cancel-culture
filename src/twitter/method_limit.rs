@@ -50,10 +50,12 @@ impl MethodLimit {
 
         if reset - old_reset > Self::SAME_RESET_TOLERANCE_SECONDS {
             // The update reset is more recent.
-            if self
-                .reset
-                .compare_and_swap(old_reset, reset, Self::DEFAULT_ORDERING)
-                == old_reset
+            if self.reset.compare_exchange(
+                old_reset,
+                reset,
+                Self::DEFAULT_ORDERING,
+                Self::DEFAULT_ORDERING,
+            ) == Ok(old_reset)
             {
                 // Only update the remaining count if the reset hasn't been updated in the meantime.
                 self.remaining.store(remaining, Self::DEFAULT_ORDERING);
