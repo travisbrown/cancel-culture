@@ -17,6 +17,7 @@ pub fn init_logging(verbosity: i32) -> Result<(), log::SetLoggerError> {
         select_log_level_filter(verbosity),
         simplelog::Config::default(),
         simplelog::TerminalMode::Stderr,
+        simplelog::ColorChoice::Auto,
     )
 }
 
