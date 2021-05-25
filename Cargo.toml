@@ -54,3 +54,63 @@ url = "2.2.0"
 
 [features]
 bundled-sqlite3 = ["libsqlite3-sys/bundled"]
+
+[[bin]]
+name = "twblocks"
+test = false
+bench = false
+
+[[bin]]
+name = "twcc"
+test = false
+bench = false
+
+[[bin]]
+name = "twdl"
+test = false
+bench = false
+
+[[bin]]
+name = "twsearch"
+test = false
+bench = false
+
+[[bin]]
+name = "twshoot"
+test = false
+bench = false
+
+[[bin]]
+name = "wbdl"
+test = false
+bench = false
+
+[[bin]]
+name = "wbparse"
+test = false
+bench = false
+
+[[bin]]
+name = "wbsave"
+test = false
+bench = false
+
+[[bin]]
+name = "wbsearch"
+test = false
+bench = false
+
+[[bin]]
+name = "wbstore"
+test = false
+bench = false
+
+[[bin]]
+name = "wbtweets"
+test = false
+bench = false
+
+[[bin]]
+name = "wbvalidate"
+test = false
+bench = false
