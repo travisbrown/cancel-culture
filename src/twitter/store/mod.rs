@@ -81,7 +81,7 @@ impl Store {
         let mut follow_insert = self.connection.prepare(FOLLOW_INSERT)?;
 
         for (follower_id, followed_id) in relations {
-            follow_insert.execute(&[SQLiteId(follower_id), SQLiteId(followed_id)])?;
+            follow_insert.execute([SQLiteId(follower_id), SQLiteId(followed_id)])?;
         }
 
         Ok(())
@@ -118,7 +118,7 @@ impl Store {
         let mut user_select = self.connection.prepare(USER_OBSERVATION_SELECT)?;
 
         let users = user_select
-            .query_map_named(&[], |row| {
+            .query_map([], |row| {
                 let id = row.get::<usize, i64>(0)? as u64;
                 let screen_name: String = row.get(1)?;
                 let count = row.get::<usize, i64>(2)? as usize;
@@ -143,7 +143,7 @@ impl Store {
         let mut follow_select = self.connection.prepare(FOLLOW_SELECT)?;
 
         let res = follow_select
-            .query_map_named(&[(":id", &(id as i64))], |row| {
+            .query_map(&[(":id", &(id as i64))], |row| {
                 let id = row.get::<usize, i64>(0)? as u64;
                 let ts: SQLiteDateTime = row.get(1)?;
                 let is_follow: bool = row.get(2)?;
