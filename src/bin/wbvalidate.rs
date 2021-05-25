@@ -37,12 +37,11 @@ async fn main() -> Void {
         if !broken {
             log::info!("Invalid hash, expected {} for {}", item.digest, item.url);
             bad_count += 1;
-            bad_items.push(item.clone());
         } else {
             log::error!("Missing or broken file {} for {}", item.digest, item.url);
             missing_count += 1;
-            bad_items.push(item.clone());
         }
+        bad_items.push(item.clone());
     }
 
     log::warn!("bad: {}, missing: {}", bad_count, missing_count);
