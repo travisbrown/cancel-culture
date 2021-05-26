@@ -1,3 +1,5 @@
+#![feature(test)]
+
 #[macro_use]
 extern crate quick_error;
 
@@ -7,3 +9,4 @@ pub mod reports;
 pub mod twitter;
 pub mod util;
 pub mod wayback;
+pub mod wbm;

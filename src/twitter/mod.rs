@@ -181,9 +181,9 @@ impl Client {
         T: Into<UserID> + Unpin + Send,
     {
         let mut futs = vec![];
-        let user_ids = ids.into_iter().map(Into::into).collect::<Vec<UserID>>();
+        let user_ids = ids.into_iter().map(Into::into);
 
-        for id in user_ids.into_iter() {
+        for id in user_ids {
             futs.push(
                 egg_mode::user::show(id.clone(), &self.app_token)
                     .map(move |result| match result {
