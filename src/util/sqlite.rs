@@ -24,6 +24,6 @@ impl FromSql for SQLiteDateTime {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         let ts: i64 = FromSql::column_result(value)?;
 
-        Ok(SQLiteDateTime(Utc.timestamp(ts, 0)))
+        Ok(SQLiteDateTime(Utc.timestamp_millis(ts)))
     }
 }

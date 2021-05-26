@@ -138,7 +138,7 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
     let user_screen_name = element.attr("data-screen-name");
     let timestamp = element_ref.select(&TIME_SEL).next().and_then(|el| {
         el.value()
-            .attr("data-time")
+            .attr("data-time-ms")
             .and_then(|v| v.parse::<i64>().ok())
     });
     let text = element_ref.select(&TEXT_SEL).next().map(|el| {
