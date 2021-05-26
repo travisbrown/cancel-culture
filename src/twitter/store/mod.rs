@@ -1,12 +1,11 @@
 pub mod wayback;
-mod wrappers;
 
+use crate::util::sqlite::{SQLiteDateTime, SQLiteId};
 use chrono::{DateTime, Utc};
 use egg_mode::user::TwitterUser;
 use log::info;
 use rusqlite::{params, Connection, Result};
 use std::collections::HashMap;
-use wrappers::{SQLiteDateTime, SQLiteId};
 
 const USER_INSERT: &str = "INSERT OR IGNORE INTO user (id, ts) VALUES (?, ?)";
 const SCREEN_NAME_INSERT: &str = "INSERT OR IGNORE INTO screen_name (value) VALUES (?)";
