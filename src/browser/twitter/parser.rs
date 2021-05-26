@@ -159,7 +159,9 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
                             .unwrap()
                             .text()
                             .map(|t| t.trim())
-                            .filter(|v| !v.is_empty() && !v.starts_with("pic.twitter.com"))
+                            // Previously we excluded pic links here with
+                            // `&& !v.starts_with("pic.twitter.com")`
+                            .filter(|v| !v.is_empty())
                             .collect::<Vec<_>>()
                             .join("");
 
