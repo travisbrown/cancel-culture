@@ -248,10 +248,10 @@ async fn main() -> Result<()> {
                                 .unwrap_or_else(|| canonical_screen_name.to_string());
 
                             let new_content = format!(
-                          "<html><body>You are being <a href=\"https://twitter.com/{}/status/{}\">redirected</a>.</body></html>",
-                          screen_name,
-                          canonical_id
-                        );
+                                "<html><body>You are being <a href=\"https://twitter.com/{}/status/{}\">redirected</a>.</body></html>",
+                                screen_name,
+                                canonical_id
+                            );
                             let mut ncb = new_content.as_bytes();
 
                             let guess_digest = Store::compute_digest(&mut ncb)?;
@@ -263,8 +263,8 @@ async fn main() -> Result<()> {
                             fallback_re.captures_iter(&content).next()
                         {
                             let new_content = format!(
-                              "<html><body>You are being <a href=\"{}\">redirected</a>.</body></html>",
-                              canonical_match.get(1).unwrap().as_str()
+                                "<html><body>You are being <a href=\"{}\">redirected</a>.</body></html>",
+                                canonical_match.get(1).unwrap().as_str()
                             );
                             let mut ncb = new_content.as_bytes();
 
