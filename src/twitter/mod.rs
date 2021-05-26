@@ -14,19 +14,21 @@ use rate_limited::{RateLimitedClient, TimelineScrollback};
 pub use tweet_lister::TweetLister;
 
 use egg_mode::{
+    error::{Error as EggModeError, TwitterErrors},
     tweet::Tweet,
     user::{TwitterUser, UserID},
-    KeyPair, Token,
+    KeyPair, RateLimit, Response, Token,
 };
 use futures::{future::try_join_all, stream::LocalBoxStream, FutureExt, TryFutureExt};
 use regex::Regex;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
 pub type Result<T> = std::result::Result<T, Error>;
-pub type EggModeResult<T> = std::result::Result<T, egg_mode::error::Error>;
+pub type EggModeResult<T> = std::result::Result<T, EggModeError>;
 
 const TWEET_LOOKUP_PAGE_SIZE: usize = 100;
 const USER_FOLLOWER_IDS_PAGE_SIZE: i32 = 5000;
@@ -168,6 +170,45 @@ impl Client {
 
         self.app_limited_client
             .make_stream(iter.peekable(), Method::USER_LOOKUP)
+    }
+
+    /// Returns either a user or Twitter's error code (50: not found, 63: suspended).
+    pub fn show_users<T, I: IntoIterator<Item = T>>(
+        &self,
+        ids: I,
+    ) -> LocalBoxStream<EggModeResult<std::result::Result<TwitterUser, (UserID, i32)>>>
+    where
+        T: Into<UserID> + Unpin + Send,
+    {
+        let mut futs = vec![];
+        let user_ids = ids.into_iter().map(Into::into).collect::<Vec<UserID>>();
+
+        for id in user_ids.into_iter() {
+            futs.push(
+                egg_mode::user::show(id.clone(), &self.app_token)
+                    .map(move |result| match result {
+                        Ok(response) => Ok(Response::map(response, |user| vec![Ok(user)])),
+                        Err(EggModeError::TwitterError(headers, TwitterErrors { errors }))
+                            if errors.len() == 1 =>
+                        {
+                            // We just use the defaults if the headers are malformed for some reason.
+                            let limit = RateLimit::try_from(&headers).unwrap_or(RateLimit {
+                                limit: -1,
+                                remaining: -1,
+                                reset: -1,
+                            });
+                            Ok(Response::new(limit, vec![Err((id, errors[0].code))]))
+                        }
+                        Err(other) => Err(other),
+                    })
+                    .boxed_local(),
+            );
+        }
+
+        let iter = futs.into_iter();
+
+        self.app_limited_client
+            .make_stream(iter.peekable(), Method::USER_SHOW)
     }
 
     pub async fn get_in_reply_to(&self, id: u64) -> EggModeResult<Option<(String, u64)>> {

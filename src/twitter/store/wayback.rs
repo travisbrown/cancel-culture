@@ -94,7 +94,15 @@ impl TweetStore {
                 let content = row.get(4)?;
                 let digest = row.get(5)?;
                 Ok((
-                    BrowserTweet::new(id, time.0, user_id, user_screen_name, content),
+                    BrowserTweet::new(
+                        id,
+                        None,
+                        time.0,
+                        user_id,
+                        user_screen_name,
+                        "".to_string(),
+                        content,
+                    ),
                     digest,
                 ))
             })?
