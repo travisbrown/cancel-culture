@@ -50,7 +50,7 @@ tinytemplate = "1.0"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 tokio-test = "0.4.0"
 toml = "0.5.7"
-tryhard = "0.3.0"
+tryhard = "0.4.0"
 url = "2.2.0"
 
 [features]
