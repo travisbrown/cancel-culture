@@ -9,6 +9,10 @@ example if some litigious person with a long history of making common cause with
 supremacists and misogynists
 [threatens to sue you for defamation](https://meta.plasm.us/posts/2020/07/25/response-to-john-de-goes/).
 
+See [this related project](https://github.com/travisbrown/deleted-tweets) for an example of the
+kind of use case cancel-culture is designed to support (an archive of around 15 million deleted
+tweets associated with Gamergate, [LambdaConf](https://geekfeminism.wikia.org/wiki/Lambdaconf_incident), Stop the Steal, etc.).
+
 One of the things this project provides is a command-line tool that takes a Twitter screen
 name and outputs a list of all of the accounts you've blocked that that account follows (sorted
 here by follower count):
