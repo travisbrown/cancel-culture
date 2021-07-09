@@ -15,7 +15,7 @@ clap = "3.0.0-beta.2"
 csv="1.1.4"
 data-encoding = "2.3.0"
 displaydoc = "0.2"
-egg-mode = { git = "https://github.com/egg-mode-rs/egg-mode", rev = "6b81073eba9c3b123ca0e80bdb5ef61d1758f131" }
+egg-mode = "0.16"
 fantoccini = { version = "0.17", features = [ "rustls-tls" ] }
 file_diff = "1.0.0"
 flate2 = "1.0"
