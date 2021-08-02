@@ -436,7 +436,7 @@ fn save_contents_gz(item: &Item, base: &str, content: &[u8]) -> Result<()> {
     let mut gz = GzBuilder::new()
         .filename(item.infer_filename())
         .write(file, Compression::default());
-    gz.write_all(&content)?;
+    gz.write_all(content)?;
     gz.finish()?;
     Ok(())
 }

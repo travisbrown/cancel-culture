@@ -74,7 +74,7 @@ impl Item {
         mimetype: &str,
         status: &str,
     ) -> Result<Item, Error> {
-        let archived = NaiveDateTime::parse_from_str(&timestamp, Item::DATE_FMT)
+        let archived = NaiveDateTime::parse_from_str(timestamp, Item::DATE_FMT)
             .map_err(|_| Error::ItemParsingError(format!("Unexpected timestamp: {}", timestamp)))?;
 
         let status_parsed = if status == "-" {

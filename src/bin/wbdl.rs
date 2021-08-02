@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
             let mut result = vec![];
 
             for query in input.lines() {
-                result.extend(client.search(&query).await?);
+                result.extend(client.search(query).await?);
             }
 
             result

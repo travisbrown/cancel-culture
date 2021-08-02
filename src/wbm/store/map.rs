@@ -42,8 +42,8 @@ impl ItemFileMap {
         let mut by_digest = HashMap::new();
 
         for (index, item) in items.iter().enumerate() {
-            Self::add_item_by_url(&mut by_url, &item, index);
-            Self::add_item_by_digest(&mut by_digest, &item, index);
+            Self::add_item_by_url(&mut by_url, item, index);
+            Self::add_item_by_digest(&mut by_digest, item, index);
         }
 
         let file = OpenOptions::new().append(true).create(true).open(path)?;

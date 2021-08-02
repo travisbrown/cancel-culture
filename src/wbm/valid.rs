@@ -155,7 +155,7 @@ impl ValidStore {
             .and_then(|os| os.to_str())
             .zip(path.extension().and_then(|os| os.to_str()))
         {
-            if Self::is_valid_digest(&name) && ext == "gz" {
+            if Self::is_valid_digest(name) && ext == "gz" {
                 if let Some(location) = self.location(name) {
                     if location.is_file() {
                         Ok(None)

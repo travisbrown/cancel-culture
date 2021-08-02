@@ -24,7 +24,7 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
     // This shouldn't really be necessary, but is for some reason?
     sleep(Duration::from_millis(500)).await;
 
-    let expected_count = parse_summary_text(&summary.text().await?.trim_start());
+    let expected_count = parse_summary_text(summary.text().await?.trim_start());
     let mut seen_count = 0;
 
     let sort = client.find(SORT_LOC).await?;

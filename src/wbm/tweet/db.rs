@@ -294,7 +294,7 @@ impl TweetStore {
 
             let mut name_map = HashMap::<String, Vec<String>>::new();
             for (screen_name, name) in pairs {
-                if let Some((_, names)) = name_map.iter_mut().find(|(known_screen_name, names)| {
+                if let Some((_, names)) = name_map.iter_mut().find(|(known_screen_name, _)| {
                     known_screen_name.to_lowercase() == screen_name.to_lowercase()
                 }) {
                     if !names.contains(&name) {

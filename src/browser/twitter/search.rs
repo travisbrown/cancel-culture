@@ -37,8 +37,8 @@ impl UserTweetSearch {
     }
 
     pub fn parse(screen_name: &str, from: &str, to: &str) -> Result<Self, ParseError> {
-        let from_date = NaiveDate::parse_from_str(&from, Self::SEARCH_DATE_FMT)?;
-        let to_date = NaiveDate::parse_from_str(&to, Self::SEARCH_DATE_FMT)?;
+        let from_date = NaiveDate::parse_from_str(from, Self::SEARCH_DATE_FMT)?;
+        let to_date = NaiveDate::parse_from_str(to, Self::SEARCH_DATE_FMT)?;
 
         Ok(Self::new(screen_name, &from_date, &to_date))
     }

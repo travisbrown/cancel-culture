@@ -207,7 +207,7 @@ impl Store {
         let mut output = vec![];
 
         for digest in contents.digests() {
-            if self.valid_store.contains(&digest) {
+            if self.valid_store.contains(digest) {
                 valid_count += 1;
             } else if invalid.contains_key(digest) {
                 invalid_count += 1;
@@ -233,7 +233,7 @@ impl Store {
         let mut output = vec![];
 
         for digest in contents.digests() {
-            let items = contents.items_by_digest(&digest);
+            let items = contents.items_by_digest(digest);
             if items.iter().any(|item| item.status == Some(302)) {
                 if redirect.contains_key(digest) {
                     valid_count += 1;

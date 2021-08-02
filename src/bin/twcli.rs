@@ -94,7 +94,7 @@ async fn main() -> Void {
             }
 
             let mut missing1 = missing.into_iter().collect::<Vec<_>>();
-            missing1.sort();
+            missing1.sort_unstable();
             let mut missing2 = missing1.split_off(missing1.len() / 2);
             missing2.reverse();
 

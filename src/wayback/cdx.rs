@@ -127,7 +127,7 @@ impl Client {
         limit: usize,
     ) -> impl Future<Output = Result<()>> + 'a {
         futures::stream::iter(items)
-            .filter(move |item| store.contains(&item).map(|v| !v))
+            .filter(move |item| store.contains(item).map(|v| !v))
             .map(Ok)
             .try_for_each_concurrent(limit, move |item| {
                 if !check_duplicate || !store.check_item_digest(&item.digest) {

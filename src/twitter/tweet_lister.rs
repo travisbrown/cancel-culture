@@ -74,7 +74,7 @@ impl<'a> TweetLister<'a> {
         for chunk in days.chunks(Self::DAY_CHUNK_SIZE) {
             let ids = UserTweetSearch::new(
                 &screen_name,
-                &chunk.last().expect("Chunk is non-empty"),
+                chunk.last().expect("Chunk is non-empty"),
                 &chunk[0].succ(),
             )
             .extract_all_split(self.browser)
