@@ -345,4 +345,61 @@ impl TweetStore {
 
         Ok(result)
     }
+
+    pub async fn check_linkable(&self, digests_path: &str) -> TweetStoreResult<()> {
+        use std::io::{self, BufRead};
+        let file = std::fs::File::open(digests_path)?;
+        let digests: std::collections::HashSet<String> =
+            io::BufReader::new(file).lines().collect::<Result<_, _>>()?;
+
+        let connection = self.connection.read().await;
+        let mut select = connection.prepare_cached(
+            "SELECT tweet.twitter_id, file.digest FROM tweet_file JOIN tweet ON tweet.id = tweet_id JOIN file ON file.id = file_id ORDER BY tweet.twitter_id"
+        )?;
+
+        let mut current_twitter_id = 0;
+        let mut current_good = 0;
+        let mut current_bad = vec![];
+
+        select
+            .query_map(params![], |row| {
+                let twitter_id = row.get::<usize, i64>(0)? as u64;
+                let digest: String = row.get(1)?;
+
+                if twitter_id != current_twitter_id {
+                    if current_twitter_id != 0 {
+                        println!(
+                            "{},{},{},{}",
+                            current_twitter_id,
+                            current_good,
+                            current_bad.len(),
+                            current_bad.join(";")
+                        );
+                    }
+
+                    current_twitter_id = twitter_id;
+                    current_good = 0;
+                    current_bad.clear();
+                }
+
+                if digests.contains(&digest) {
+                    current_good += 1;
+                } else {
+                    current_bad.push(digest);
+                }
+
+                Ok(())
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        println!(
+            "{},{},{},{}",
+            current_twitter_id,
+            current_good,
+            current_bad.len(),
+            current_bad.join(";")
+        );
+
+        Ok(())
+    }
 }
