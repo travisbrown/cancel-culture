@@ -95,13 +95,6 @@ impl Store {
                                 Some(Ok(content)) => {
                                     match super::util::parse_tweet_redirect_html(&content) {
                                         Some((tweeter, tweet_status_id)) => {
-                                            println!(
-                                                "{},{},{},{}",
-                                                retweeter,
-                                                tweeter,
-                                                retweet_status_id,
-                                                tweet_status_id
-                                            );
                                             let pair = (
                                                 (retweeter, retweet_status_id),
                                                 (tweeter, tweet_status_id),
