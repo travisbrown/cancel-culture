@@ -87,19 +87,28 @@ async fn main() -> Void {
                 .collect::<Vec<u64>>()
                 .await;
 
+            log::info!("Processing missing users");
+
             for id in valid {
                 missing.remove(&id);
             }
 
-            client
-                .show_users(missing)
-                .try_for_each(|res| async move {
-                    if let Err((UserID::ID(id), code)) = res {
-                        println!("{:?},{}", id, code);
-                    };
-                    Ok(())
-                })
-                .await?;
+            let mut missing1 = missing.into_iter().collect::<Vec<_>>();
+            missing1.sort();
+            let mut missing2 = missing1.split_off(missing1.len() / 2);
+            missing2.reverse();
+
+            futures::stream::select(
+                client.show_users(missing1),
+                client.show_users_user_token(missing2),
+            )
+            .try_for_each(|res| async move {
+                if let Err((UserID::ID(id), code)) = res {
+                    println!("{:?},{}", id, code);
+                };
+                Ok(())
+            })
+            .await?;
         }
     };
 

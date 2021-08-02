@@ -173,6 +173,45 @@ impl Client {
     }
 
     /// Returns either a user or Twitter's error code (50: not found, 63: suspended).
+    pub fn show_users_user_token<T, I: IntoIterator<Item = T>>(
+        &self,
+        ids: I,
+    ) -> LocalBoxStream<EggModeResult<std::result::Result<TwitterUser, (UserID, i32)>>>
+    where
+        T: Into<UserID> + Unpin + Send,
+    {
+        let mut futs = vec![];
+        let user_ids = ids.into_iter().map(Into::into);
+
+        for id in user_ids {
+            futs.push(
+                egg_mode::user::show(id.clone(), &self.user_token)
+                    .map(move |result| match result {
+                        Ok(response) => Ok(Response::map(response, |user| vec![Ok(user)])),
+                        Err(EggModeError::TwitterError(headers, TwitterErrors { errors }))
+                            if errors.len() == 1 =>
+                        {
+                            // We just use the defaults if the headers are malformed for some reason.
+                            let limit = RateLimit::try_from(&headers).unwrap_or(RateLimit {
+                                limit: -1,
+                                remaining: -1,
+                                reset: -1,
+                            });
+                            Ok(Response::new(limit, vec![Err((id, errors[0].code))]))
+                        }
+                        Err(other) => Err(other),
+                    })
+                    .boxed_local(),
+            );
+        }
+
+        let iter = futs.into_iter();
+
+        self.user_limited_client
+            .make_stream(iter.peekable(), Method::USER_SHOW)
+    }
+
+    /// Returns either a user or Twitter's error code (50: not found, 63: suspended).
     pub fn show_users<T, I: IntoIterator<Item = T>>(
         &self,
         ids: I,
