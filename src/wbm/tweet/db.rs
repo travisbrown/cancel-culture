@@ -29,6 +29,15 @@ const TWEET_SELECT_BY_ID: &str = "
         LIMIT 1
 ";
 
+const TWEET_MULTI_SELECT_BY_ID: &str = "
+    SELECT parent_twitter_id, ts, user_twitter_id, screen_name, name, content, digest
+        FROM tweet
+        JOIN tweet_file ON tweet_file.tweet_id = tweet.id
+        JOIN file ON file.id = tweet_file.file_id
+        JOIN user on user.id = tweet_file.user_id
+        WHERE tweet.twitter_id = ?
+";
+
 const TWEET_SELECT_FULL: &str = "
     SELECT id
         FROM tweet
@@ -48,11 +57,21 @@ const GET_USER_NAMES: &str = "
 ";
 
 const GET_USER_KNOWN_ACTIVE_RANGE: &str = "
-    SELECT COUNT(tweet.id), MIN(tweet.ts), MAX(tweet.ts)
+    SELECT COUNT(DISTINCT tweet.twitter_id), MIN(tweet.ts), MAX(tweet.ts)
         FROM user
         JOIN tweet_file ON tweet_file.user_id = user.id
         JOIN tweet ON tweet.id = tweet_file.tweet_id AND tweet.user_twitter_id = user.twitter_id
         WHERE user.twitter_id = ? AND user.screen_name LIKE ?;
+";
+
+const GET_REPLIES: &str = "
+    SELECT tweet.twitter_id, reply_tweet.twitter_id, reply_user.twitter_id, reply_user.screen_name FROM tweet 
+        JOIN tweet_file ON tweet_file.tweet_id = tweet.id
+        JOIN user ON user.id = tweet_file.user_id
+        JOIN tweet AS reply_tweet ON reply_tweet.parent_twitter_id = tweet.twitter_id
+        JOIN tweet_file AS reply_tweet_file ON reply_tweet_file.tweet_id = reply_tweet.id
+        JOIN user as reply_user ON reply_user.id = reply_tweet_file.user_id
+        WHERE tweet.twitter_id != reply_tweet.twitter_id AND user.twitter_id = ? AND user.screen_name like ?;
 ";
 
 pub type TweetStoreResult<T> = Result<T, TweetStoreError>;
@@ -272,6 +291,85 @@ impl TweetStore {
         Ok(result)
     }
 
+    pub async fn get_multi_tweets(
+        &self,
+        status_ids: &[u64],
+    ) -> TweetStoreResult<Vec<(BrowserTweet, String)>> {
+        let connection = self.connection.read().await;
+        let mut select = connection.prepare_cached(TWEET_MULTI_SELECT_BY_ID)?;
+        let mut result = Vec::with_capacity(status_ids.len());
+
+        for id in status_ids {
+            match select.query_and_then(params![SQLiteId(*id)], |row| {
+                let parent_twitter_id = row.get::<usize, i64>(0)? as u64;
+                let ts: SQLiteDateTime = row.get(1)?;
+                let user_twitter_id = row.get::<usize, i64>(2)? as u64;
+                let screen_name: String = row.get(3)?;
+                let name: String = row.get(4)?;
+                let content: String = row.get(5)?;
+                let digest: String = row.get(6)?;
+
+                Ok((
+                    BrowserTweet::new(
+                        *id,
+                        if parent_twitter_id == *id {
+                            None
+                        } else {
+                            Some(parent_twitter_id)
+                        },
+                        ts.0,
+                        user_twitter_id,
+                        screen_name,
+                        name,
+                        content,
+                    ),
+                    digest,
+                ))
+            }) {
+                Ok(pairs) => result.extend(
+                    pairs
+                        .into_iter()
+                        .collect::<Result<Vec<_>, TweetStoreError>>()?,
+                ),
+                Err(error) => log::error!("Error for {}: {:?}", id, error),
+            }
+        }
+
+        result.sort();
+
+        Ok(result)
+    }
+
+    pub async fn get_replies(
+        &self,
+        twitter_id: u64,
+        screen_name: &str,
+    ) -> TweetStoreResult<Vec<(u64, u64, u64, String)>> {
+        let connection = self.connection.read().await;
+        let mut select = connection.prepare_cached(GET_REPLIES)?;
+        let mut result: Vec<(u64, u64, u64, String)> = vec![];
+
+        let mut result: Vec<_> = select
+            .query_and_then(params![SQLiteId(twitter_id), screen_name], |row| {
+                let parent_twitter_id = row.get::<usize, i64>(0)? as u64;
+                let status_twitter_id = row.get::<usize, i64>(1)? as u64;
+                let user_twitter_id = row.get::<usize, i64>(2)? as u64;
+                let screen_name: String = row.get(3)?;
+
+                Ok((
+                    parent_twitter_id,
+                    status_twitter_id,
+                    user_twitter_id,
+                    screen_name,
+                ))
+            })?
+            .collect::<Result<Vec<_>, rusqlite::Error>>()?;
+
+        result.sort();
+        result.dedup();
+
+        Ok(result)
+    }
     pub async fn get_users(&self, user_ids: &[u64]) -> TweetStoreResult<Vec<UserRecord>> {
         let connection = self.connection.read().await;
         let mut get_user_names = connection.prepare_cached(GET_USER_NAMES)?;
@@ -342,6 +440,18 @@ impl TweetStore {
                 }
             }
         }
+
+        Ok(result)
+    }
+
+    pub async fn tweet_ids_by_user_id(&self, user_id: u64) -> TweetStoreResult<Vec<u64>> {
+        let connection = self.connection.read().await;
+        let mut select = connection
+            .prepare_cached("SELECT tweet.twitter_id FROM tweet WHERE user_twitter_id = ?")?;
+
+        let result = select
+            .query_map(params![user_id], |row| Ok(row.get::<usize, i64>(0)? as u64))?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(result)
     }

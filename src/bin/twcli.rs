@@ -14,6 +14,24 @@ async fn main() -> Void {
     let client = Client::from_config_file(&opts.key_file).await?;
 
     match opts.command {
+        SubCommand::TweetIdsByUserId { db } => {
+            let stdin = std::io::stdin();
+            let handle = stdin.lock();
+            let ids = handle
+                .lines()
+                .map(|line| line.ok().and_then(|input| input.parse::<u64>().ok()))
+                .collect::<Option<HashSet<u64>>>()
+                .unwrap();
+
+            let store = cancel_culture::wbm::tweet::db::TweetStore::new(db, false)?;
+
+            for id in ids {
+                let result = store.tweet_ids_by_user_id(id).await?;
+                for tweet_id in result {
+                    println!("{},{}", id, tweet_id);
+                }
+            }
+        }
         SubCommand::UserInfo { db } => {
             let stdin = std::io::stdin();
             let handle = stdin.lock();
@@ -33,14 +51,19 @@ async fn main() -> Void {
                 .from_writer(std::io::stdout());
 
             for result in results {
-                let mut record = vec![
+                let record = vec![
                     result.id.to_string(),
                     result.screen_name,
                     result.first_seen.format("%Y-%m-%d").to_string(),
                     result.last_seen.format("%Y-%m-%d").to_string(),
                     result.tweet_count.to_string(),
+                    result
+                        .names
+                        .iter()
+                        .map(|name| name.replace(";", "\\;"))
+                        .collect::<Vec<_>>()
+                        .join(";"),
                 ];
-                record.extend(result.names);
 
                 writer.write_record(record)?;
             }
@@ -134,6 +157,10 @@ struct Opts {
 enum SubCommand {
     ScreenNames,
     UserInfo {
+        #[clap(long)]
+        db: String,
+    },
+    TweetIdsByUserId {
         #[clap(long)]
         db: String,
     },
