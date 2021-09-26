@@ -20,6 +20,8 @@ pub enum Error {
     HttpClientError(#[from] reqwest::Error),
     /// an error occurred when piloting the wayback machine subcrate: {0}
     WaybackClientError(#[from] crate::wayback::Error),
+    /// failure to read from CDX JSON file: {0}
+    CdxJsonError(#[source] std::io::Error),
     /// a failure occurred when parsing a tweet id string: {0}
     TweetIDParseError(String),
     /// the tweet ID {0}, which was supposed to be a reply, was not a reply

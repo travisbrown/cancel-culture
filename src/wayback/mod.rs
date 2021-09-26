@@ -115,13 +115,15 @@ impl Item {
     }
 
     fn from_row(row: &[String]) -> Result<Item> {
-        if row.len() != 5 {
+        if row.len() == 5 {
+            Item::parse(&row[0], &row[1], &row[2], &row[3], &row[4])
+        } else if row.len() == 6 {
+            Item::parse(&row[0], &row[1], &row[2], &row[3], &row[5])
+        } else {
             Err(Error::ItemParsingError(format!(
                 "Invalid item fields: {:?}",
                 row
             )))
-        } else {
-            Item::parse(&row[0], &row[1], &row[2], &row[3], &row[4])
         }
     }
 }
