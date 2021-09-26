@@ -13,7 +13,7 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 #[tokio::main]
 async fn main() -> Void {
     let opts: Opts = Opts::parse();
-    let _ = cli::init_logging(opts.verbose);
+    let _ = cli::init_logging(opts.verbose)?;
     let client = Client::from_config_file(&opts.key_file).await?;
     let store = Store::new(Connection::open(&opts.db_file)?);
 
@@ -48,6 +48,8 @@ async fn main() -> Void {
             store.add_users(&users)?;
         },
     };
+
+    log::logger().flush();
 
     Ok(())
 }

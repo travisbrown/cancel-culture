@@ -7,7 +7,7 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 #[tokio::main]
 async fn main() -> Void {
     let opts: Opts = Opts::parse();
-    let _ = cli::init_logging(opts.verbose);
+    let _ = cli::init_logging(opts.verbose)?;
 
     let fantoccini_client = cancel_culture::browser::make_client_or_panic(
         &opts.browser,
@@ -29,6 +29,8 @@ async fn main() -> Void {
         let saved_url = client.save(&url).await?;
         println!("{}", saved_url);
     }
+
+    log::logger().flush();
 
     Ok(())
 }

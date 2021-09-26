@@ -12,7 +12,7 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 async fn main() -> Void {
     //valid::Result<()> {
     let opts: Opts = Opts::parse();
-    let _ = cli::init_logging(opts.verbose);
+    let _ = cli::init_logging(opts.verbose)?;
 
     match opts.command {
         SubCommand::Create { dir } => {
@@ -226,6 +226,8 @@ async fn main() -> Void {
             }
         }
     }
+
+    log::logger().flush();
 
     Ok(())
 }

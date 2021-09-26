@@ -4,7 +4,7 @@ use clap::{crate_authors, crate_version, Clap};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
-    let _ = cli::init_logging(opts.verbose);
+    let _ = cli::init_logging(opts.verbose)?;
 
     let mut browser = make_client_or_panic(
         &opts.browser,
@@ -26,6 +26,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for id in ids {
         println!("{}", id);
     }
+
+    log::logger().flush();
 
     Ok(())
 }

@@ -6,12 +6,16 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 #[tokio::main]
 async fn main() -> Void {
     let opts: Opts = Opts::parse();
-    let _ = cli::init_logging(opts.verbose);
+    let _ = cli::init_logging(opts.verbose)?;
 
     let store = Store::load(opts.store_dir)?;
     let tweet_store = TweetStore::new(opts.db, opts.clean)?;
 
-    Ok(store.export_tweets(&tweet_store).await?)
+    store.export_tweets(&tweet_store).await?;
+
+    log::logger().flush();
+
+    Ok(())
 }
 
 #[derive(Clap)]

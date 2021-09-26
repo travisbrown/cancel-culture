@@ -15,7 +15,7 @@ use std::io::Read;
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
-    let _ = cli::init_logging(opts.verbose);
+    let _ = cli::init_logging(opts.verbose).unwrap();
 
     let client = Client::from_config_file(&opts.key_file).await?;
 
@@ -471,6 +471,8 @@ async fn main() -> Result<()> {
                     }
                 }
             }
+
+            log::logger().flush();
 
             Ok(())
         }
