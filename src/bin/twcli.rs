@@ -10,7 +10,7 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 #[tokio::main]
 async fn main() -> Void {
     let opts: Opts = Opts::parse();
-    let _ = cli::init_logging(opts.verbose);
+    let _ = cli::init_logging(opts.verbose)?;
     let client = Client::from_config_file(&opts.key_file).await?;
 
     match opts.command {
@@ -111,6 +111,8 @@ async fn main() -> Void {
             .await?;
         }
     };
+
+    log::logger().flush();
 
     Ok(())
 }

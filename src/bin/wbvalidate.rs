@@ -14,7 +14,7 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 #[tokio::main]
 async fn main() -> Void {
     let opts: Opts = Opts::parse();
-    let _ = cli::init_logging(opts.verbose);
+    let _ = cli::init_logging(opts.verbose)?;
 
     let store = Store::load(opts.store_dir)?;
     let query = opts.query.unwrap_or_else(|| "".to_string());
@@ -65,6 +65,8 @@ async fn main() -> Void {
             }
         }
     }
+
+    log::logger().flush();
 
     Ok(())
 }

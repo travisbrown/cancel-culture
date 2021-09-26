@@ -8,7 +8,7 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 #[tokio::main]
 async fn main() -> Void {
     let opts: Opts = Opts::parse();
-    let _ = cli::init_logging(opts.verbose);
+    let _ = cli::init_logging(opts.verbose)?;
 
     match opts.command {
         SubCommand::Count { file, screen_name } => {
@@ -30,6 +30,8 @@ async fn main() -> Void {
             println!("{}", count);
         }
     }
+
+    log::logger().flush();
 
     Ok(())
 }

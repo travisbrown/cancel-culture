@@ -12,7 +12,7 @@ use std::io::BufRead;
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
-    let _ = cli::init_logging(opts.verbose);
+    let _ = cli::init_logging(opts.verbose).unwrap();
 
     let store = Store::load(opts.store_dir)?;
 
@@ -329,6 +329,8 @@ async fn main() -> Result<()> {
                 .await;
         }
     }
+
+    log::logger().flush();
 
     Ok(())
 }

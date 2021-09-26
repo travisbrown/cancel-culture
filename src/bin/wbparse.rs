@@ -12,7 +12,7 @@ type Void = Result<(), Box<dyn std::error::Error>>;
 #[tokio::main]
 async fn main() -> Void {
     let args: Vec<String> = std::env::args().collect();
-    let _ = cli::init_logging(3);
+    let _ = cli::init_logging(3)?;
     let path = Path::new(&args[1]);
     let store = Store::load("wayback")?;
 
@@ -73,6 +73,8 @@ async fn main() -> Void {
 
         log::info!("Parsed {} files", count);
     }
+
+    log::logger().flush();
 
     Ok(())
 }
