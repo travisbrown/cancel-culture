@@ -9,6 +9,7 @@ use egg_mode::user::TwitterUser;
 use futures::TryStreamExt;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
 use std::io::Read;
 
 #[tokio::main]
@@ -282,11 +283,20 @@ async fn main() -> Result<()> {
             limit,
             report,
             ref store,
+            ref cdx,
             ref screen_name,
         }) => {
             let wayback_client = wayback::cdx::Client::new();
-            let url = format!("twitter.com/{}/status/*", screen_name);
-            let mut items = wayback_client.search(&url).await?;
+            let mut items = match cdx {
+                Some(cdx_path) => {
+                    let cdx_file = File::open(cdx_path).map_err(Error::CdxJsonError)?;
+                    wayback::cdx::Client::load_json(cdx_file)?
+                }
+                None => {
+                    let url = format!("twitter.com/{}/status/*", screen_name);
+                    wayback_client.search(&url).await?
+                }
+            };
 
             items.sort_unstable_by_key(|item| item.url.clone());
 
@@ -543,12 +553,15 @@ struct DeletedTweets {
     #[clap(short = 'l', long)]
     /// Only check the tweets the Wayback Machine most recently knows about
     limit: Option<usize>,
-    /// Print a Markdown report with full text.
+    /// Print a Markdown report with full text
     #[clap(short = 'r', long)]
     report: bool,
-    /// Local store directory for downloaded Wayback files.
+    /// Local store directory for downloaded Wayback files
     #[clap(short = 's', long)]
     store: Option<String>,
+    /// Optional JSON file path for CDX results (useful for large accounts)
+    #[clap(short = 'c', long)]
+    cdx: Option<String>,
     screen_name: String,
 }
 

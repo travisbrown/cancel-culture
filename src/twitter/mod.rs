@@ -268,18 +268,23 @@ impl Client {
     ) -> Result<HashMap<u64, bool>> {
         let mut status_map = HashMap::new();
 
-        let chunks = try_join_all(
-            ids.into_iter()
-                .collect::<Vec<u64>>()
-                .chunks(TWEET_LOOKUP_PAGE_SIZE)
-                .map(|chunk| egg_mode::tweet::lookup_map(chunk.to_vec(), &self.app_token)),
-        )
-        .await?
-        .into_iter();
+        // TODO: revisit the magic number here
+        let id_vec = ids.into_iter().collect::<Vec<u64>>();
 
-        for chunk in chunks {
-            for (k, v) in chunk.response {
-                status_map.insert(k, v);
+        let top_level_split = id_vec.chunks(50000).collect::<Vec<_>>();
+
+        for ids in top_level_split {
+            let chunks = try_join_all(
+                ids.chunks(TWEET_LOOKUP_PAGE_SIZE)
+                    .map(|chunk| egg_mode::tweet::lookup_map(chunk.to_vec(), &self.app_token)),
+            )
+            .await?
+            .into_iter();
+
+            for chunk in chunks {
+                for (k, v) in chunk.response {
+                    status_map.insert(k, v);
+                }
             }
         }
 
