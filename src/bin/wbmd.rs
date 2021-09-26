@@ -231,14 +231,18 @@ async fn main() -> Void {
                 .map(|line| {
                     let fields = line.split(',').collect::<Vec<_>>();
 
-                    fields[0].parse::<u64>().map(|id| (id, fields[1].to_string()))
+                    fields[0]
+                        .parse::<u64>()
+                        .map(|id| (id, fields[1].to_string()))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
             let tweet_store = wbm::tweet::db::TweetStore::new(db, false)?;
 
             for (user_twitter_id, screen_name) in users {
-                let results = tweet_store.get_replies(user_twitter_id, &screen_name).await?;
+                let results = tweet_store
+                    .get_replies(user_twitter_id, &screen_name)
+                    .await?;
 
                 for (twitter_id, reply_twitter_id, reply_user_twitter_id, reply_screen_name) in
                     results

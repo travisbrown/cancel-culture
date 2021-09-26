@@ -177,32 +177,32 @@ fn extract_phc(
         .select(&PHC_SCREEN_NAME_SEL)
         .next()
         .and_then(|el| el.value().attr("href").map(|v| v.split_at(1).1.to_string()))?;
-    println!("{}", screen_name);
+    //println!("{}", screen_name);
     let bio = element_ref
         .select(&PHC_BIO_SEL)
         .next()
         .map(|el| el.inner_html().trim().to_string())?;
-    println!("{}", bio);
+    //println!("{}", bio);
     let location = element_ref
         .select(&PHC_LOCATION_SEL)
         .next()
         .map(|el| el.inner_html().trim().to_string())?;
-    println!("{}", location);
+    //println!("{}", location);
     let url = element_ref
         .select(&PHC_URL_SEL)
         .next()
         .and_then(|el| el.value().attr("title"))?;
-    println!("{}", url);
+    //println!("{}", url);
     let join_date = element_ref
         .select(&PHC_JOINDATE_SEL)
         .next()
         .and_then(|el| el.value().attr("title"))?;
-    println!("{}", join_date);
+    //println!("{}", join_date);
     let birth_date = element_ref
         .select(&PHC_BIRTHDATE_SEL)
         .next()
         .and_then(|el| el.value().attr("title").map(|v| v.to_string()));
-    println!("{:?}", birth_date);
+    //println!("{:?}", birth_date);
 
     Some((
         screen_name,
