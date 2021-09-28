@@ -27,6 +27,8 @@ async fn main() -> Void {
         let url = result.expect("Invalid input");
 
         let saved_url = client.save(&url).await?;
+        tokio::time::sleep(std::time::Duration::from_millis(10000)).await;
+
         println!("{}", saved_url);
     }
 
