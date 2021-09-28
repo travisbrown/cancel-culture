@@ -8,6 +8,7 @@ use clap::{crate_authors, crate_version, Clap};
 use egg_mode::user::TwitterUser;
 use futures::TryStreamExt;
 use itertools::Itertools;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
@@ -382,9 +383,17 @@ async fn main() -> Result<()> {
                             None => {
                                 log::info!("Downloading {}", item.url);
                                 let bytes = wayback_client.download(item, true).await?;
-                                std::str::from_utf8(&bytes)
-                                    .expect("Invalid UTF-8 bytes")
-                                    .to_string()
+                                match String::from_utf8_lossy(&bytes) {
+                                    Cow::Borrowed(value) => value.to_string(),
+                                    Cow::Owned(value_with_replacements) => {
+                                        log::error!(
+                                            "Invalid UTF-8 bytes in item with digest {} and URL {}",
+                                            item.digest,
+                                            item.url
+                                        );
+                                        value_with_replacements
+                                    }
+                                }
                             }
                         };
 
