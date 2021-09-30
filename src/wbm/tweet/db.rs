@@ -98,16 +98,16 @@ impl Ord for UserRecord {
     fn cmp(&self, other: &Self) -> Ordering {
         (
             self.id,
-            self.first_seen,
             self.last_seen,
+            self.first_seen,
             &self.screen_name,
             &self.names,
             self.tweet_count,
         )
             .cmp(&(
                 other.id,
-                other.first_seen,
                 other.last_seen,
+                other.first_seen,
                 &other.screen_name,
                 &other.names,
                 other.tweet_count,
