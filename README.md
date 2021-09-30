@@ -10,8 +10,13 @@ supremacists and misogynists
 [threatens to sue you for defamation](https://meta.plasm.us/posts/2020/07/25/response-to-john-de-goes/).
 
 See [this related project](https://github.com/travisbrown/deleted-tweets) for an example of the
-kind of use case cancel-culture is designed to support (an archive of around 15 million deleted
-tweets associated with Gamergate, [LambdaConf](https://geekfeminism.wikia.org/wiki/Lambdaconf_incident), Stop the Steal, etc.).
+kind of use case cancel-culture is designed to support (an archive of around 35 million deleted
+tweets associated with Gamergate, [LambdaConf](https://geekfeminism.wikia.org/wiki/Lambdaconf_incident), Stop the Steal, etc.),
+or [this project](https://github.com/travisbrown/evasion) focused on tracking ban evasion by far-right accounts,
+or [this recent project](https://github.com/salcoast/deleted-tweets-archive) by
+[Salish Coast Anti-Fascist Action](https://twitter.com/SalishcoastA).
+
+## Examples
 
 One of the things this project provides is a command-line tool that takes a Twitter screen
 name and outputs a list of all of the accounts you've blocked that that account follows (sorted
