@@ -134,7 +134,7 @@ impl Client {
                     info!("Downloading {}", item.url);
                     tryhard::retry_fn(move || self.download(item, true))
                         .retries(7)
-                        .exponential_backoff(Duration::from_millis(250))
+                        .exponential_backoff(Duration::from_millis(500))
                         .then(move |bytes_result| match bytes_result {
                             Ok(bytes) => store.add(item, bytes).boxed_local(),
                             Err(_) => async move {
