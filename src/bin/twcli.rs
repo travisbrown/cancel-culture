@@ -2,6 +2,7 @@ use cancel_culture::{cli, twitter::Client};
 use clap::{crate_authors, crate_version, Clap};
 use egg_mode::user::UserID;
 use futures::{StreamExt, TryStreamExt};
+use itertools::Itertools;
 use std::collections::HashSet;
 use std::io::BufRead;
 
@@ -32,7 +33,7 @@ async fn main() -> Void {
                 }
             }
         }
-        SubCommand::UserInfo { db } => {
+        SubCommand::UserInfo { db, md } => {
             let stdin = std::io::stdin();
             let handle = stdin.lock();
             let ids = handle
@@ -46,26 +47,60 @@ async fn main() -> Void {
 
             results.sort();
 
-            let mut writer = csv::WriterBuilder::new()
-                .flexible(true)
-                .from_writer(std::io::stdout());
+            if md {
+                results.reverse();
+                println!("|Twitter ID|Screen name|First seen|Last seen|Tweets archived|");
+                println!("|----------|-----------|----------|---------|---------------|");
+                for result in &results {
+                    println!(
+                        "|{}|{}|{}|{}|{}|",
+                        result.id,
+                        result.screen_name,
+                        result.first_seen.format("%Y-%m-%d"),
+                        result.last_seen.format("%Y-%m-%d"),
+                        result.tweet_count
+                    );
+                }
+                println!("\n|Twitter ID|Display names|");
+                println!("|----------|-----------|");
 
-            for result in results {
-                let record = vec![
-                    result.id.to_string(),
-                    result.screen_name,
-                    result.first_seen.format("%Y-%m-%d").to_string(),
-                    result.last_seen.format("%Y-%m-%d").to_string(),
-                    result.tweet_count.to_string(),
-                    result
-                        .names
-                        .iter()
-                        .map(|name| name.replace(";", "\\;"))
-                        .collect::<Vec<_>>()
-                        .join(";"),
-                ];
+                for (id, group) in &results.into_iter().group_by(|result| result.id) {
+                    let mut names = group.flat_map(|result| result.names).collect::<Vec<_>>();
+                    names.sort();
+                    names.dedup();
 
-                writer.write_record(record)?;
+                    println!(
+                        "|{}|{}|",
+                        id,
+                        names
+                            .iter()
+                            .map(|name| name.replace("|", "\\|"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+            } else {
+                let mut writer = csv::WriterBuilder::new()
+                    .flexible(true)
+                    .from_writer(std::io::stdout());
+
+                for result in results {
+                    let record = vec![
+                        result.id.to_string(),
+                        result.screen_name,
+                        result.first_seen.format("%Y-%m-%d").to_string(),
+                        result.last_seen.format("%Y-%m-%d").to_string(),
+                        result.tweet_count.to_string(),
+                        result
+                            .names
+                            .iter()
+                            .map(|name| name.replace(";", "\\;"))
+                            .collect::<Vec<_>>()
+                            .join(";"),
+                    ];
+
+                    writer.write_record(record)?;
+                }
             }
         }
         SubCommand::ScreenNames => {
@@ -159,6 +194,8 @@ enum SubCommand {
     UserInfo {
         #[clap(long)]
         db: String,
+        #[clap(long)]
+        md: bool,
     },
     TweetIdsByUserId {
         #[clap(long)]
