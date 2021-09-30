@@ -16,6 +16,12 @@ or [this project](https://github.com/travisbrown/evasion) focused on tracking ba
 or [this recent project](https://github.com/salcoast/deleted-tweets-archive) by
 [Salish Coast Anti-Fascist Action](https://twitter.com/SalishcoastA).
 
+## Testimonials
+
+[A Twitter user](https://web.archive.org/web/20210930150828/https://twitter.com/gringovice/status/1443551046823989256):
+
+> Still, he somehow has access to everything you’ve ever posted & deleted, and can seemingly immediately find your new alt/resurrect/punished accounts.
+
 ## Examples
 
 One of the things this project provides is a command-line tool that takes a Twitter screen
