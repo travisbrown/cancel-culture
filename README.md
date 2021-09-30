@@ -16,6 +16,8 @@ or [this project](https://github.com/travisbrown/evasion) focused on tracking ba
 or [this recent project](https://github.com/salcoast/deleted-tweets-archive) by
 [Salish Coast Anti-Fascist Action](https://twitter.com/SalishcoastA).
 
+## Examples
+
 One of the things this project provides is a command-line tool that takes a Twitter screen
 name and outputs a list of all of the accounts you've blocked that that account follows (sorted
 here by follower count):
