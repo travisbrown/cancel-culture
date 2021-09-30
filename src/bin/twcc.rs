@@ -282,6 +282,7 @@ async fn main() -> Result<()> {
         }
         SubCommand::DeletedTweets(DeletedTweets {
             limit,
+            parallelism,
             report,
             ref store,
             ref cdx,
@@ -369,7 +370,9 @@ async fn main() -> Result<()> {
                 }
 
                 log::info!("Saving {} items to store", items.len());
-                wayback_client.save_all(s, &items, true, 4).await?;
+                wayback_client
+                    .save_all(s, &items, true, parallelism)
+                    .await?;
             }
 
             for (id, _) in deleted {
@@ -564,6 +567,9 @@ struct DeletedTweets {
     #[clap(short = 'l', long)]
     /// Only check the tweets the Wayback Machine most recently knows about
     limit: Option<usize>,
+    /// Level of parallelism
+    #[clap(short, long, default_value = "4")]
+    parallelism: usize,
     /// Print a Markdown report with full text
     #[clap(short = 'r', long)]
     report: bool,
