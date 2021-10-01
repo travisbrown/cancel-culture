@@ -113,7 +113,7 @@ async fn main() -> Result<()> {
                 .flat_map(|input| input.parse::<u64>().ok())
                 .collect::<Vec<_>>();
 
-            for chunk in ids.chunks(128) {
+            for chunk in ids.chunks(32) {
                 for id in chunk {
                     log::info!("Blocking user ID: {}", id);
                 }
