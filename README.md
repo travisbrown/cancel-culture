@@ -149,10 +149,10 @@ for your Twitter account, and you'll need to provide the necessary keys in a fil
 
 ```toml
 [twitter]
-consumerKey="****"
-consumerSecret="****"
-accessToken="****"
-accessTokenSecret="****"
+consumerKey = "****"
+consumerSecret = "****"
+accessToken = "****"
+accessTokenSecret = "****"
 ```
 
 Some of the other tools require a [WebDriver](https://www.w3.org/TR/webdriver/) server instead of
