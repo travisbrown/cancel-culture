@@ -12,7 +12,7 @@ pub async fn status_exists(client: &mut Client, id: u64) -> Result<bool, CmdErro
     let url = format!("https://twitter.com/tweet/status/{}", id);
 
     client.goto(&url).await?;
-    let mut heading = client.wait_for_find(HEADING_LOC).await?;
+    let mut heading = client.wait().forever().for_element(HEADING_LOC).await?;
 
     Ok(heading
         .attr("data-testid")
@@ -30,12 +30,16 @@ pub async fn log_in(client: &mut Client, username: &str, password: &str) -> Resu
     client.goto("https://twitter.com/login").await?;
 
     let mut username_input = client
-        .wait_for_find(Locator::Css("input[name='session[username_or_email]']"))
+        .wait()
+        .forever()
+        .for_element(Locator::Css("input[name='session[username_or_email]']"))
         .await?;
     username_input.send_keys(username).await?;
 
     let mut password_input = client
-        .wait_for_find(Locator::Css("input[name='session[password]']"))
+        .wait()
+        .forever()
+        .for_element(Locator::Css("input[name='session[password]']"))
         .await?;
     password_input
         .send_keys(&(String::from(password) + "\n"))
@@ -57,7 +61,7 @@ pub async fn shoot_tweet_bytes(
     client.goto(&url).await?;
 
     let locator = fantoccini::Locator::XPath("//main//h1[@role='heading']");
-    client.wait_for_find(locator).await?;
+    client.wait().forever().for_element(locator).await?;
 
     if let Some(duration) = wait_for_load {
         tokio::time::sleep(duration).await;

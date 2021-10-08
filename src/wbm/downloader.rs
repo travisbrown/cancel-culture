@@ -31,7 +31,7 @@ pub struct Downloader {
     other_store: ValidStore,
     redirect_mappings: HashMap<String, String>,
     invalid_mappings: HashMap<String, String>,
-    output: PathBuf,
+    _output: PathBuf,
 }
 
 impl Downloader {
@@ -65,7 +65,7 @@ impl Downloader {
             other_store: ValidStore::new(other_store_path),
             redirect_mappings,
             invalid_mappings,
-            output: output_path.as_ref().to_path_buf(),
+            _output: output_path.as_ref().to_path_buf(),
         })
     }
 

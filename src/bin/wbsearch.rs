@@ -19,7 +19,7 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
     .await;
     client.goto(&mk_wayback_search_url(&opts.query)).await?;
 
-    let mut summary = client.wait_for_find(SUMMARY_LOC).await?;
+    let mut summary = client.wait().forever().for_element(SUMMARY_LOC).await?;
 
     // This shouldn't really be necessary, but is for some reason?
     sleep(Duration::from_millis(500)).await;
@@ -79,7 +79,7 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
 async fn get_next_link(
     client: &mut Client,
 ) -> Result<Option<Element>, fantoccini::error::CmdError> {
-    let mut next = client.wait_for_find(NEXT_LOC).await?;
+    let mut next = client.wait().forever().for_element(NEXT_LOC).await?;
     match next.attr("class").await? {
         Some(class_value) => {
             if class_value.contains("disabled") {
@@ -95,7 +95,7 @@ async fn get_next_link(
 async fn extract_links(
     client: &mut Client,
 ) -> Result<Vec<WaybackLink>, fantoccini::error::CmdError> {
-    let mut table = client.wait_for_find(TABLE_LOC).await?;
+    let mut table = client.wait().forever().for_element(TABLE_LOC).await?;
     let mut rows = table.find_all(ROW_LOC).await?;
     let mut res = vec![];
 
