@@ -26,7 +26,11 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
 
     sleep(Duration::from_millis(2000)).await;
 
-    let mut account_list = client.wait_for_find(ACCOUNT_LIST_LOC).await?;
+    let mut account_list = client
+        .wait()
+        .forever()
+        .for_element(ACCOUNT_LIST_LOC)
+        .await?;
     let mut seen = HashSet::new();
     let mut attempts = 0;
 

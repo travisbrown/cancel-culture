@@ -40,7 +40,11 @@ impl Client {
             sleep(Duration::from_millis(Self::SAVE_WAIT_MILLIS)).await;
             self.underlying.goto(Self::SAVE_URL).await?;
 
-            self.underlying.wait_for_find(Self::SAVE_FORM_LOC).await?;
+            self.underlying
+                .wait()
+                .forever()
+                .for_element(Self::SAVE_FORM_LOC)
+                .await?;
             let mut form = self.underlying.form(Self::SAVE_FORM_LOC).await?;
             form.set_by_name("url", url)
                 .await?
@@ -53,7 +57,12 @@ impl Client {
                 .submit()
                 .await?;
 
-            let mut result = self.underlying.wait_for_find(Self::SAVE_DONE_LOC).await?;
+            let mut result = self
+                .underlying
+                .wait()
+                .forever()
+                .for_element(Self::SAVE_DONE_LOC)
+                .await?;
             let result_href = result.attr("href").await?;
 
             match result_href {

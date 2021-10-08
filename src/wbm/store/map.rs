@@ -9,7 +9,7 @@ pub(super) struct ItemFileMap {
     pub(super) items: Vec<Item>,
     by_url: HashMap<String, Vec<usize>>,
     by_digest: HashMap<String, Vec<usize>>,
-    pub(super) file: File,
+    pub(super) _file: File,
 }
 
 impl ItemFileMap {
@@ -52,7 +52,7 @@ impl ItemFileMap {
             items,
             by_url,
             by_digest,
-            file,
+            _file: file,
         })
     }
 
