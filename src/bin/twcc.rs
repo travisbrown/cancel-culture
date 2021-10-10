@@ -270,13 +270,13 @@ async fn main() -> Result<()> {
                 .split_whitespace()
                 .flat_map(|input| input.parse::<u64>().ok());
 
-            let status_map = client.statuses_exist(ids).await?;
-            let mut missing = status_map.into_iter().collect::<Vec<_>>();
-            missing.sort_unstable();
-
-            for id in missing {
-                println!("{} {}", id.0, id.1);
-            }
+            client
+                .statuses_exist_stream(ids)
+                .try_for_each(|(id, exists)| async move {
+                    println!("{},{}", id, if exists { "1" } else { "0" });
+                    Ok(())
+                })
+                .await?;
 
             Ok(())
         }
