@@ -20,6 +20,7 @@ use egg_mode::{
     KeyPair, RateLimit, Response, Token,
 };
 use futures::{future::try_join_all, stream::LocalBoxStream, FutureExt, TryFutureExt};
+use futures::{stream, StreamExt, TryStreamExt};
 use regex::Regex;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -289,6 +290,32 @@ impl Client {
         }
 
         Ok(status_map.iter().map(|(k, v)| (*k, v.is_some())).collect())
+    }
+
+    pub fn statuses_exist_stream<I: IntoIterator<Item = u64>>(
+        &self,
+        ids: I,
+    ) -> LocalBoxStream<EggModeResult<(u64, bool)>> {
+        let mut ids = ids.into_iter().collect::<Vec<u64>>();
+        ids.sort();
+        ids.dedup();
+        ids.reverse();
+
+        stream::unfold(ids, move |mut ids| async move {
+            if ids.is_empty() {
+                None
+            } else if ids.len() <= TWEET_LOOKUP_PAGE_SIZE {
+                Some((egg_mode::tweet::lookup_map(ids, &self.app_token), vec![]))
+            } else {
+                let chunk = ids.split_off(ids.len() - TWEET_LOOKUP_PAGE_SIZE);
+                Some((egg_mode::tweet::lookup_map(chunk, &self.app_token), ids))
+            }
+        })
+        .map(Ok)
+        .try_buffer_unordered(100)
+        .map_ok(|res| stream::iter(res.response.into_iter().map(|(k, v)| Ok((k, v.is_some())))))
+        .try_flatten()
+        .boxed_local()
     }
 
     pub fn user_timeline_stream<T: Into<UserID>>(
