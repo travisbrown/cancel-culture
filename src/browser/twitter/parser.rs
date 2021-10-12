@@ -172,7 +172,6 @@ pub fn extract_phcs(doc: &Html) -> Vec<(String, String, String, String, String, 
 fn extract_phc(
     element_ref: &ElementRef,
 ) -> Option<(String, String, String, String, String, Option<String>)> {
-    let element = element_ref.value();
     let screen_name = element_ref
         .select(&PHC_SCREEN_NAME_SEL)
         .next()

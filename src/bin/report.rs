@@ -1,13 +1,10 @@
 use cancel_culture::browser::twitter::parser::BrowserTweet;
-use cancel_culture::{cli, wbm, wbm::digest, wbm::valid};
+use cancel_culture::{cli, wbm};
 use clap::{crate_authors, crate_version, Clap};
 use csv::ReaderBuilder;
-use futures::StreamExt;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
 
@@ -76,7 +73,7 @@ async fn main() -> Void {
                 .collect::<Vec<_>>();
             result.reverse();
 
-            for (id, versions) in &result {
+            for (_, versions) in &result {
                 let content = &versions
                     .iter()
                     .max_by_key(|(t, _)| t.text.len())
@@ -105,7 +102,7 @@ async fn main() -> Void {
                     "#### {} ({})\n\n> {}\n\n",
                     versions[0].0.time.format("%e %B %Y"),
                     versions[0].0.id,
-                    content.split("\n").join("\n> ")
+                    content.split('\n').join("\n> ")
                 );
 
                 for (tweet, item) in items {
@@ -116,7 +113,7 @@ async fn main() -> Void {
                         item.wayback_url(false)
                     );
                 }
-                println!("");
+                println!();
             }
         }
     }
