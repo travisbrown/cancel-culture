@@ -29,6 +29,15 @@ const TWEET_SELECT_BY_ID: &str = "
         LIMIT 1
 ";
 
+const TWEET_MULTI_SELECT_BY_ID: &str = "
+    SELECT parent_twitter_id, ts, user_twitter_id, screen_name, name, content, digest
+        FROM tweet
+        JOIN tweet_file ON tweet_file.tweet_id = tweet.id
+        JOIN file ON file.id = tweet_file.file_id
+        JOIN user on user.id = tweet_file.user_id
+        WHERE tweet.twitter_id = ?
+";
+
 const TWEET_SELECT_FULL: &str = "
     SELECT id
         FROM tweet
@@ -278,6 +287,55 @@ impl TweetStore {
                 Err(error) => log::error!("Error for {}: {:?}", id, error),
             }
         }
+
+        Ok(result)
+    }
+
+    pub async fn get_multi_tweets(
+        &self,
+        status_ids: &[u64],
+    ) -> TweetStoreResult<Vec<(BrowserTweet, String)>> {
+        let connection = self.connection.read().await;
+        let mut select = connection.prepare_cached(TWEET_MULTI_SELECT_BY_ID)?;
+        let mut result = Vec::with_capacity(status_ids.len());
+
+        for id in status_ids {
+            match select.query_and_then(params![SQLiteId(*id)], |row| {
+                let parent_twitter_id = row.get::<usize, i64>(0)? as u64;
+                let ts: SQLiteDateTime = row.get(1)?;
+                let user_twitter_id = row.get::<usize, i64>(2)? as u64;
+                let screen_name: String = row.get(3)?;
+                let name: String = row.get(4)?;
+                let content: String = row.get(5)?;
+                let digest: String = row.get(6)?;
+
+                Ok((
+                    BrowserTweet::new(
+                        *id,
+                        if parent_twitter_id == *id {
+                            None
+                        } else {
+                            Some(parent_twitter_id)
+                        },
+                        ts.0,
+                        user_twitter_id,
+                        screen_name,
+                        name,
+                        content,
+                    ),
+                    digest,
+                ))
+            }) {
+                Ok(pairs) => result.extend(
+                    pairs
+                        .into_iter()
+                        .collect::<Result<Vec<_>, TweetStoreError>>()?,
+                ),
+                Err(error) => log::error!("Error for {}: {:?}", id, error),
+            }
+        }
+
+        result.sort();
 
         Ok(result)
     }
