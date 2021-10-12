@@ -347,7 +347,6 @@ impl TweetStore {
     ) -> TweetStoreResult<Vec<(u64, u64, u64, String)>> {
         let connection = self.connection.read().await;
         let mut select = connection.prepare_cached(GET_REPLIES)?;
-        let mut result: Vec<(u64, u64, u64, String)> = vec![];
 
         let mut result: Vec<_> = select
             .query_and_then(params![SQLiteId(twitter_id), screen_name], |row| {

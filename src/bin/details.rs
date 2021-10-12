@@ -1,11 +1,6 @@
-use cancel_culture::{browser::twitter::parser, cli, wbm, wbm::digest, wbm::valid};
+use cancel_culture::{browser::twitter::parser, cli};
 use clap::{crate_authors, crate_version, Clap};
-use csv::ReaderBuilder;
-use futures::StreamExt;
-use std::collections::HashSet;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
 
@@ -26,8 +21,7 @@ async fn main() -> Void {
             let mut out = csv::WriterBuilder::new().from_writer(std::io::stdout());
 
             for (a, b, c, d, e, f) in parser::extract_phcs(&html?) {
-                out.write_record(&[a, b, c, d, e, f.unwrap_or("".to_string())])?;
-                //println!("{}, {}, {}, {}, {}, {:?}", a, b, c, d, e, f)
+                out.write_record(&[a, b, c, d, e, f.unwrap_or_else(|| "".to_string())])?;
             }
         }
     }

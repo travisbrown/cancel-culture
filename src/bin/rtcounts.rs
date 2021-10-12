@@ -29,18 +29,18 @@ fn main() -> Void {
 
             let rter_form_counts = screen_name_forms
                 .entry(rter_lc.clone())
-                .or_insert_with(|| HashMap::new());
+                .or_insert_with(HashMap::new);
             let rter_form_count = rter_form_counts.entry(rter).or_insert(0);
             *rter_form_count += 1;
 
             let rted_form_counts = screen_name_forms
                 .entry(rted_lc.clone())
-                .or_insert_with(|| HashMap::new());
+                .or_insert_with(HashMap::new);
             let rted_form_count = rted_form_counts.entry(rted).or_insert(0);
             *rted_form_count += 1;
 
-            let for_rter = rts.entry(rter_lc).or_insert_with(|| HashMap::new());
-            let pairs = for_rter.entry(rted_lc).or_insert_with(|| HashSet::new());
+            let for_rter = rts.entry(rter_lc).or_insert_with(HashMap::new);
+            let pairs = for_rter.entry(rted_lc).or_insert_with(HashSet::new);
 
             pairs.insert((rter_id, rted_id));
         }

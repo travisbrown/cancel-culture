@@ -16,7 +16,7 @@ async fn main() -> Void {
 
     let html = parse_html_gz(&mut file)?;
 
-    let description = extract_description(&html).is_some();
+    let _description = extract_description(&html).is_some();
     let tweets = extract_tweets(&html);
 
     for tweet in tweets {

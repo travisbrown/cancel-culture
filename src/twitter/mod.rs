@@ -297,7 +297,7 @@ impl Client {
         ids: I,
     ) -> LocalBoxStream<EggModeResult<(u64, bool)>> {
         let mut ids = ids.into_iter().collect::<Vec<u64>>();
-        ids.sort();
+        ids.sort_unstable();
         ids.dedup();
         ids.reverse();
 
