@@ -217,7 +217,7 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
     });
 
     id.zip(user_id)
-        .zip(parent_id)
+        .zip(Some(parent_id.unwrap_or(0)))
         .zip(user_screen_name)
         .zip(user_name)
         .zip(timestamp)
