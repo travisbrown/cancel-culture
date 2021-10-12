@@ -14,6 +14,24 @@ async fn main() -> Void {
     let client = Client::from_config_file(&opts.key_file).await?;
 
     match opts.command {
+        SubCommand::TweetIdsByUserId { db } => {
+            let stdin = std::io::stdin();
+            let handle = stdin.lock();
+            let ids = handle
+                .lines()
+                .map(|line| line.ok().and_then(|input| input.parse::<u64>().ok()))
+                .collect::<Option<HashSet<u64>>>()
+                .unwrap();
+
+            let store = cancel_culture::wbm::tweet::db::TweetStore::new(db, false)?;
+
+            for id in ids {
+                let result = store.tweet_ids_by_user_id(id).await?;
+                for tweet_id in result {
+                    println!("{},{}", id, tweet_id);
+                }
+            }
+        }
         SubCommand::UserInfo { db } => {
             let stdin = std::io::stdin();
             let handle = stdin.lock();
@@ -139,6 +157,10 @@ struct Opts {
 enum SubCommand {
     ScreenNames,
     UserInfo {
+        #[clap(long)]
+        db: String,
+    },
+    TweetIdsByUserId {
         #[clap(long)]
         db: String,
     },

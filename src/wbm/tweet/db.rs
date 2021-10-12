@@ -386,6 +386,18 @@ impl TweetStore {
         Ok(result)
     }
 
+    pub async fn tweet_ids_by_user_id(&self, user_id: u64) -> TweetStoreResult<Vec<u64>> {
+        let connection = self.connection.read().await;
+        let mut select = connection
+            .prepare_cached("SELECT tweet.twitter_id FROM tweet WHERE user_twitter_id = ?")?;
+
+        let result = select
+            .query_map(params![user_id], |row| Ok(row.get::<usize, i64>(0)? as u64))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(result)
+    }
+
     pub async fn check_linkable(&self, digests_path: &str) -> TweetStoreResult<()> {
         use std::io::{self, BufRead};
         let file = std::fs::File::open(digests_path)?;
