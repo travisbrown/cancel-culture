@@ -33,14 +33,19 @@ async fn main() -> Void {
                 .from_writer(std::io::stdout());
 
             for result in results {
-                let mut record = vec![
+                let record = vec![
                     result.id.to_string(),
                     result.screen_name,
                     result.first_seen.format("%Y-%m-%d").to_string(),
                     result.last_seen.format("%Y-%m-%d").to_string(),
                     result.tweet_count.to_string(),
+                    result
+                        .names
+                        .iter()
+                        .map(|name| name.replace(";", "\\;"))
+                        .collect::<Vec<_>>()
+                        .join(";"),
                 ];
-                record.extend(result.names);
 
                 writer.write_record(record)?;
             }
