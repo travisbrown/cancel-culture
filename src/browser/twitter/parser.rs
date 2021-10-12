@@ -10,7 +10,7 @@ use scraper::Html;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
 
-#[derive(Debug, Eq, PartialEq, Serialize)]
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct BrowserTweet {
     pub id: u64,
     pub parent_id: Option<u64>,
@@ -110,6 +110,17 @@ lazy_static! {
         Selector::parse("meta[property='og:description']").unwrap();
     static ref CANONICAL_SEL: Selector = Selector::parse("link[rel='canonical']").unwrap();
     static ref STATUS_ID_RE: regex::Regex = regex::Regex::new(r"/status/(\d+)$").unwrap();
+    static ref PHC_DIV_SEL: Selector = Selector::parse("div.ProfileHeaderCard").unwrap();
+    static ref PHC_SCREEN_NAME_SEL: Selector =
+        Selector::parse("a.ProfileHeaderCard-screennameLink").unwrap();
+    static ref PHC_BIO_SEL: Selector = Selector::parse("p.ProfileHeaderCard-bio").unwrap();
+    static ref PHC_LOCATION_SEL: Selector =
+        Selector::parse("span.ProfileHeaderCard-locationText").unwrap();
+    static ref PHC_URL_SEL: Selector = Selector::parse("span.ProfileHeaderCard-urlText a").unwrap();
+    static ref PHC_JOINDATE_SEL: Selector =
+        Selector::parse("span.ProfileHeaderCard-joinDateText").unwrap();
+    static ref PHC_BIRTHDATE_SEL: Selector =
+        Selector::parse("span.ProfileHeaderCard-birthdateText").unwrap();
 }
 
 pub fn parse_html<R: Read>(input: &mut R) -> Result<Html, std::io::Error> {
@@ -150,6 +161,51 @@ pub fn extract_tweets(doc: &Html) -> Vec<BrowserTweet> {
     doc.select(&TWEET_DIV_SEL)
         .filter_map(|el| extract_div_tweet(&el))
         .collect()
+}
+
+pub fn extract_phcs(doc: &Html) -> Vec<(String, String, String, String, String, Option<String>)> {
+    doc.select(&PHC_DIV_SEL)
+        .filter_map(|el| extract_phc(&el))
+        .collect()
+}
+
+fn extract_phc(
+    element_ref: &ElementRef,
+) -> Option<(String, String, String, String, String, Option<String>)> {
+    let element = element_ref.value();
+    let screen_name = element_ref
+        .select(&PHC_SCREEN_NAME_SEL)
+        .next()
+        .and_then(|el| el.value().attr("href").map(|v| v.split_at(1).1.to_string()))?;
+    let bio = element_ref
+        .select(&PHC_BIO_SEL)
+        .next()
+        .map(|el| el.inner_html().trim().to_string())?;
+    let location = element_ref
+        .select(&PHC_LOCATION_SEL)
+        .next()
+        .map(|el| el.inner_html().trim().to_string())?;
+    let url = element_ref
+        .select(&PHC_URL_SEL)
+        .next()
+        .and_then(|el| el.value().attr("title"))?;
+    let join_date = element_ref
+        .select(&PHC_JOINDATE_SEL)
+        .next()
+        .and_then(|el| el.value().attr("title"))?;
+    let birth_date = element_ref
+        .select(&PHC_BIRTHDATE_SEL)
+        .next()
+        .and_then(|el| el.value().attr("title").map(|v| v.to_string()));
+
+    Some((
+        screen_name,
+        bio,
+        location,
+        url.to_string(),
+        join_date.to_string(),
+        birth_date,
+    ))
 }
 
 pub fn extract_tweet_json(content: &str) -> Option<BrowserTweet> {
@@ -217,7 +273,7 @@ fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {
     });
 
     id.zip(user_id)
-        .zip(parent_id)
+        .zip(Some(parent_id.unwrap_or(0)))
         .zip(user_screen_name)
         .zip(user_name)
         .zip(timestamp)

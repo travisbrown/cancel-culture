@@ -1,10 +1,8 @@
 use cancel_culture::browser::twitter::parser::{
     extract_description, extract_tweets, parse_html_gz,
 };
-use cancel_culture::{cli, wayback::Store};
-use flate2::read::GzDecoder;
+use cancel_culture::cli;
 use std::fs::File;
-use std::io::Read;
 use std::path::Path;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
@@ -14,7 +12,18 @@ async fn main() -> Void {
     let args: Vec<String> = std::env::args().collect();
     let _ = cli::init_logging(3)?;
     let path = Path::new(&args[1]);
-    let store = Store::load("wayback")?;
+    let mut file = File::open(&path)?;
+
+    let html = parse_html_gz(&mut file)?;
+
+    let description = extract_description(&html).is_some();
+    let tweets = extract_tweets(&html);
+
+    for tweet in tweets {
+        println!("{:?}", tweet);
+    }
+
+    /*let store = Store::load("wayback")?;
 
     if path.is_file() {
         let file = File::open(&path)?;
@@ -72,7 +81,7 @@ async fn main() -> Void {
         }
 
         log::info!("Parsed {} files", count);
-    }
+    }*/
 
     log::logger().flush();
 
