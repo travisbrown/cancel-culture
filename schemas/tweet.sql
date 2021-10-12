@@ -32,3 +32,5 @@ CREATE TABLE tweet_file (
     FOREIGN KEY (file_id) REFERENCES file (id)
 );
 CREATE INDEX tweet_file_tweet_id_index ON tweet_file (tweet_id);
+CREATE INDEX tweet_file_file_id_index ON tweet_file (file_id);
+CREATE INDEX tweet_file_user_id_index ON tweet_file (user_id);
