@@ -48,7 +48,7 @@ const GET_USER_NAMES: &str = "
 ";
 
 const GET_USER_KNOWN_ACTIVE_RANGE: &str = "
-    SELECT COUNT(tweet.id), MIN(tweet.ts), MAX(tweet.ts)
+    SELECT COUNT(DISTINCT tweet.twitter_id), MIN(tweet.ts), MAX(tweet.ts)
         FROM user
         JOIN tweet_file ON tweet_file.user_id = user.id
         JOIN tweet ON tweet.id = tweet_file.tweet_id AND tweet.user_twitter_id = user.twitter_id
