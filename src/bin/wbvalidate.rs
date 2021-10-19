@@ -2,7 +2,7 @@ use cancel_culture::{
     cli,
     wayback::{cdx::Client, Store},
 };
-use clap::{crate_authors, crate_version, Clap};
+use clap::{crate_authors, crate_version, Parser};
 use flate2::{Compression, GzBuilder};
 use std::fs::File;
 use std::io::Write;
@@ -71,7 +71,7 @@ async fn main() -> Void {
     Ok(())
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(name = "wbvalidate", version = crate_version!(), author = crate_authors!())]
 struct Opts {
     /// Wayback Machine store directory

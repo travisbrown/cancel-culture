@@ -4,7 +4,7 @@ use cancel_culture::{
     twitter::{extract_status_id, Client, Error, Result},
     wayback,
 };
-use clap::{crate_authors, crate_version, Clap};
+use clap::{crate_authors, crate_version, Parser};
 use egg_mode::user::TwitterUser;
 use futures::TryStreamExt;
 use itertools::Itertools;
@@ -532,7 +532,7 @@ fn escape_tweet_text(text: &str) -> String {
     text.replace(r"\'", "'").replace("\n", " ")
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(name = "twcc", version = crate_version!(), author = crate_authors!())]
 struct Opts {
     /// TOML file containing Twitter API keys
@@ -545,7 +545,7 @@ struct Opts {
     command: SubCommand,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 enum SubCommand {
     #[clap(version = crate_version!(), author = crate_authors!())]
     BlockedFollows(BlockedFollows),
@@ -575,25 +575,25 @@ enum SubCommand {
 }
 
 /// Get the URL of a tweet given the URL or status ID of a reply
-#[derive(Clap)]
+#[derive(Parser)]
 struct LookupReply {
     query: String,
 }
 
 /// For a given user, list everyone they follow who you block
-#[derive(Clap)]
+#[derive(Parser)]
 struct BlockedFollows {
     screen_name: String,
 }
 
 /// For a given user, print a report about their followers
-#[derive(Clap)]
+#[derive(Parser)]
 struct FollowerReport {
     screen_name: String,
 }
 
 /// List Wayback Machine URLs for all deleted tweets by a user
-#[derive(Clap)]
+#[derive(Parser)]
 struct DeletedTweets {
     #[clap(short = 'l', long)]
     /// Only check the tweets the Wayback Machine most recently knows about
@@ -611,7 +611,7 @@ struct DeletedTweets {
 }
 
 /// Print a list of all users who follow you (or someone else)
-#[derive(Clap)]
+#[derive(Parser)]
 struct ListFollowers {
     /// Print only the user's ID (by default you get the ID and screen name)
     #[clap(short = 'i', long)]
@@ -622,7 +622,7 @@ struct ListFollowers {
 }
 
 /// Print a list of all users you (or someone else) follows
-#[derive(Clap)]
+#[derive(Parser)]
 struct ListFriends {
     /// Print only the user's ID (by default you get the ID and screen name)
     #[clap(short = 'i', long)]
@@ -633,7 +633,7 @@ struct ListFriends {
 }
 
 /// Print a list of (up to approximately 3200) tweet IDs for a user
-#[derive(Clap)]
+#[derive(Parser)]
 struct ListTweets {
     /// Include retweet information
     #[clap(short = 'r', long)]
@@ -646,7 +646,7 @@ struct ListTweets {
 }
 
 /// Print a list of all users you've blocked
-#[derive(Clap)]
+#[derive(Parser)]
 struct ListBlocks {
     /// Print only the user's ID (by default you get the ID and screen name)
     #[clap(short = 'i', long)]

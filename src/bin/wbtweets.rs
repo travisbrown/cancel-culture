@@ -1,5 +1,5 @@
 use cancel_culture::{cli, twitter::store::wayback::TweetStore, wayback::Store};
-use clap::{crate_authors, crate_version, Clap};
+use clap::{crate_authors, crate_version, Parser};
 
 type Void = Result<(), Box<dyn std::error::Error>>;
 
@@ -18,7 +18,7 @@ async fn main() -> Void {
     Ok(())
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(name = "wbtweets", version = crate_version!(), author = crate_authors!())]
 struct Opts {
     /// Wayback Machine store directory

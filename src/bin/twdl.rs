@@ -2,7 +2,7 @@ use cancel_culture::{
     cli,
     twitter::{store::Store, Client},
 };
-use clap::{crate_authors, crate_version, Clap};
+use clap::{crate_authors, crate_version, Parser};
 use egg_mode::user::TwitterUser;
 use futures::{stream::LocalBoxStream, StreamExt, TryStreamExt};
 use log::info;
@@ -81,7 +81,7 @@ async fn add_user_follows(client: &Client, store: &Store, users: &[TwitterUser])
     Ok(store.add_follows(relations)?)
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(name = "stores", version = crate_version!(), author = crate_authors!())]
 struct Opts {
     /// TOML file containing Twitter API keys
