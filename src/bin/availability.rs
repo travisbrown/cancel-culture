@@ -20,7 +20,7 @@ fn main() -> Void {
         let reader = BufReader::new(fs::File::open(entry.path())?);
         for res in reader.lines() {
             let line = res?;
-            let mut fields = line.split(",").map(|field| field.trim());
+            let mut fields = line.split(',').map(|field| field.trim());
 
             let tweet_id = fields
                 .next()
@@ -42,7 +42,7 @@ fn main() -> Void {
     }
 
     let mut pairs = availability.into_iter().collect::<Vec<_>>();
-    pairs.sort();
+    pairs.sort_unstable();
 
     for (tweet_id, is_available) in pairs {
         println!("{},{}", tweet_id, if is_available { "1" } else { "0" });
