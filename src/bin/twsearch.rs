@@ -1,5 +1,5 @@
 use cancel_culture::{browser::make_client_or_panic, cli};
-use clap::{crate_authors, crate_version, Clap};
+use clap::{crate_authors, crate_version, Parser};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(version = crate_version!(), author = crate_authors!())]
 struct Opts {
     /// TOML file containing Twitter API keys

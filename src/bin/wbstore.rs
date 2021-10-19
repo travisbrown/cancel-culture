@@ -2,7 +2,7 @@ use cancel_culture::{
     cli,
     wayback::{cdx::Client, Item, Result, Store},
 };
-use clap::{crate_authors, crate_version, Clap};
+use clap::{crate_authors, crate_version, Parser};
 use flate2::{write::GzEncoder, Compression, GzBuilder};
 use futures::StreamExt;
 use std::collections::HashSet;
@@ -335,7 +335,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(name = "wbstore", version = crate_version!(), author = crate_authors!())]
 struct Opts {
     /// Wayback Machine store directory
@@ -351,7 +351,7 @@ struct Opts {
     command: SubCommand,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 enum SubCommand {
     #[clap(version = crate_version!(), author = crate_authors!())]
     Export(ExportQuery),
@@ -372,7 +372,7 @@ enum SubCommand {
 }
 
 /// Export an archive for items whose URL contains the query string
-#[derive(Clap)]
+#[derive(Parser)]
 struct ExportQuery {
     /// Name of output archive (and file prefix)
     #[clap(short, long)]
@@ -382,7 +382,7 @@ struct ExportQuery {
 }
 
 /// Merge two data directories
-#[derive(Clap)]
+#[derive(Parser)]
 struct MergeCommand {
     /// Base directory
     #[clap(short, long)]
@@ -393,14 +393,14 @@ struct MergeCommand {
 }
 
 /// Check a single digest
-#[derive(Clap)]
+#[derive(Parser)]
 struct CheckDigest {
     /// Digest to check
     value: String,
 }
 
 /// Re-download broken files
-#[derive(Clap)]
+#[derive(Parser)]
 struct FixCommand {
     /// Base directory for temporary storage
     #[clap(short, long)]
@@ -411,7 +411,7 @@ struct FixCommand {
 }
 
 /// Check a directory of known valid files
-#[derive(Clap)]
+#[derive(Parser)]
 struct CheckValidCommand {
     /// Base directory
     #[clap(short, long)]

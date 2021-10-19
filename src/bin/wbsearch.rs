@@ -1,6 +1,6 @@
 use cancel_culture::browser;
 use chrono::NaiveDate;
-use clap::{crate_authors, crate_version, Clap};
+use clap::{crate_authors, crate_version, Parser};
 use fantoccini::{elements::Element, Client, Locator};
 use std::time::Duration;
 use tokio::time::sleep;
@@ -134,7 +134,7 @@ fn mk_wayback_search_url(query: &str) -> String {
     format!("https://web.archive.org/web/*/{}", query)
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(version = crate_version!(), author = crate_authors!())]
 struct Opts {
     query: String,
