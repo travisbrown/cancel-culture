@@ -129,15 +129,49 @@ async fn main() -> Result<()> {
 
             Ok(())
         }
-        SubCommand::ListTweets(ListTweets { screen_name }) => {
-            let ids = client
-                .tweets(screen_name, true, true)
-                .map_ok(|status| status.id)
+        SubCommand::ListTweets(ListTweets {
+            retweets,
+            media,
+            screen_name,
+        }) => {
+            let info = client
+                .tweets(screen_name, true, retweets)
+                .map_ok(|status| {
+                    let id = status.id;
+
+                    let retweet_info = status.retweeted_status.map(|retweeted| {
+                        let user = retweeted.user.unwrap();
+                        (retweeted.id, user.id, user.screen_name)
+                    });
+
+                    let media_info = status
+                        .extended_entities
+                        .map(|entities| {
+                            entities
+                                .media
+                                .into_iter()
+                                .map(|entity| entity.expanded_url)
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+
+                    (id, retweet_info, media_info)
+                })
                 .try_collect::<Vec<_>>()
                 .await?;
 
-            for id in ids {
-                println!("{}", id);
+            for (id, retweet_info, media_info) in info {
+                print!("{}", id);
+                if retweets {
+                    print!(",");
+                    if let Some((id, user_id, screen_name)) = retweet_info {
+                        print!("{};{};{}", id, user_id, screen_name);
+                    }
+                }
+                if media {
+                    print!(",{}", media_info.join(";"));
+                }
+                println!();
             }
 
             Ok(())
@@ -601,6 +635,12 @@ struct ListFriends {
 /// Print a list of (up to approximately 3200) tweet IDs for a user
 #[derive(Clap)]
 struct ListTweets {
+    /// Include retweet information
+    #[clap(short = 'r', long)]
+    retweets: bool,
+    /// Include media information
+    #[clap(short = 'm', long)]
+    media: bool,
     /// The user whose tweets you want to list
     screen_name: String,
 }
