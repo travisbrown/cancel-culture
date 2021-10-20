@@ -150,7 +150,7 @@ async fn main() -> Result<()> {
                             entities
                                 .media
                                 .into_iter()
-                                .map(|entity| entity.expanded_url)
+                                .map(|entity| entity.media_url_https)
                                 .collect::<Vec<_>>()
                         })
                         .unwrap_or_default();
