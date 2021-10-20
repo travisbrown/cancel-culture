@@ -132,6 +132,7 @@ async fn main() -> Result<()> {
         SubCommand::ListTweets(ListTweets {
             retweets,
             media,
+            withheld,
             screen_name,
         }) => {
             let info = client
@@ -155,12 +156,12 @@ async fn main() -> Result<()> {
                         })
                         .unwrap_or_default();
 
-                    (id, retweet_info, media_info)
+                    (id, retweet_info, media_info, status.withheld_in_countries)
                 })
                 .try_collect::<Vec<_>>()
                 .await?;
 
-            for (id, retweet_info, media_info) in info {
+            for (id, retweet_info, media_info, withholding_info) in info {
                 print!("{}", id);
                 if retweets {
                     print!(",");
@@ -170,6 +171,14 @@ async fn main() -> Result<()> {
                 }
                 if media {
                     print!(",{}", media_info.join(";"));
+                }
+                if withheld {
+                    print!(
+                        ",{}",
+                        withholding_info
+                            .map(|codes| codes.join(";"))
+                            .unwrap_or_default()
+                    );
                 }
                 println!();
             }
@@ -641,6 +650,9 @@ struct ListTweets {
     /// Include media information
     #[clap(short = 'm', long)]
     media: bool,
+    /// Include withholding codes
+    #[clap(short = 'w', long)]
+    withheld: bool,
     /// The user whose tweets you want to list
     screen_name: String,
 }
