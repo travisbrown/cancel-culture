@@ -5,7 +5,7 @@ use cancel_culture::{
     wayback,
 };
 use clap::{crate_authors, crate_version, Parser};
-use egg_mode::user::TwitterUser;
+use egg_mode::{tweet::Tweet, user::TwitterUser};
 use futures::TryStreamExt;
 use itertools::Itertools;
 use std::borrow::Cow;
@@ -134,56 +134,57 @@ async fn main() -> Result<()> {
             media,
             withheld,
             screen_name,
+        }) => client
+            .tweets(screen_name, true, retweets)
+            .try_for_each(|tweet| async move {
+                println!(
+                    "{}",
+                    tweet_to_report(&tweet, retweets, media, withheld, false)
+                );
+                Ok(())
+            })
+            .await
+            .map_err(Error::from),
+        SubCommand::LookupTweets(LookupTweets {
+            retweets,
+            media,
+            withheld,
         }) => {
-            let info = client
-                .tweets(screen_name, true, retweets)
-                .map_ok(|status| {
-                    let id = status.id;
+            let stdin = std::io::stdin();
+            let mut buffer = String::new();
+            let mut handle = stdin.lock();
+            handle
+                .read_to_string(&mut buffer)
+                .map_err(Error::StdinError)?;
 
-                    let retweet_info = status.retweeted_status.map(|retweeted| {
-                        let user = retweeted.user.unwrap();
-                        (retweeted.id, user.id, user.screen_name)
-                    });
+            let ids = buffer
+                .split_whitespace()
+                .flat_map(|input| input.parse::<u64>().ok());
 
-                    let media_info = status
-                        .extended_entities
-                        .map(|entities| {
-                            entities
-                                .media
-                                .into_iter()
-                                .map(|entity| entity.media_url_https)
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default();
+            let comma_count = vec![retweets, media, withheld]
+                .iter()
+                .filter(|v| **v)
+                .count();
 
-                    (id, retweet_info, media_info, status.withheld_in_countries)
-                })
-                .try_collect::<Vec<_>>()
-                .await?;
-
-            for (id, retweet_info, media_info, withholding_info) in info {
-                print!("{}", id);
-                if retweets {
-                    print!(",");
-                    if let Some((id, user_id, screen_name)) = retweet_info {
-                        print!("{};{};{}", id, user_id, screen_name);
+            client
+                .lookup_tweets(ids)
+                .try_for_each(|(id, result)| async move {
+                    match result {
+                        Some(tweet) => {
+                            println!(
+                                "{}",
+                                tweet_to_report(&tweet, retweets, media, withheld, true)
+                            );
+                        }
+                        None => {
+                            println!("{},0{}", id, ",".repeat(comma_count));
+                        }
                     }
-                }
-                if media {
-                    print!(",{}", media_info.join(";"));
-                }
-                if withheld {
-                    print!(
-                        ",{}",
-                        withholding_info
-                            .map(|codes| codes.join(";"))
-                            .unwrap_or_default()
-                    );
-                }
-                println!();
-            }
 
-            Ok(())
+                    Ok(())
+                })
+                .await
+                .map_err(Error::from)
         }
         SubCommand::LookupReply(LookupReply { query }) => {
             let reply_id = Client::parse_tweet_id(&query)?;
@@ -575,6 +576,8 @@ enum SubCommand {
     ListBlocks(ListBlocks),
     #[clap(version = crate_version!(), author = crate_authors!())]
     ListTweets(ListTweets),
+    #[clap(version = crate_version!(), author = crate_authors!())]
+    LookupTweets(LookupTweets),
     /// Block a list of user IDs (from stdin)
     #[clap(version = crate_version!(), author = crate_authors!())]
     ImportBlocks,
@@ -657,10 +660,79 @@ struct ListTweets {
     screen_name: String,
 }
 
+/// Read tweet IDs from stdin and print info
+#[derive(Parser)]
+struct LookupTweets {
+    /// Include retweet information
+    #[clap(short = 'r', long)]
+    retweets: bool,
+    /// Include media information
+    #[clap(short = 'm', long)]
+    media: bool,
+    /// Include withholding codes
+    #[clap(short = 'w', long)]
+    withheld: bool,
+}
+
 /// Print a list of all users you've blocked
 #[derive(Parser)]
 struct ListBlocks {
     /// Print only the user's ID (by default you get the ID and screen name)
     #[clap(short = 'i', long)]
     ids_only: bool,
+}
+
+fn tweet_to_report(
+    tweet: &Tweet,
+    retweets: bool,
+    media: bool,
+    withheld: bool,
+    include_status: bool,
+) -> String {
+    let id = tweet.id;
+
+    let retweet_info = tweet.retweeted_status.as_ref().map(|retweeted| {
+        let user = retweeted.user.as_ref().unwrap();
+        (retweeted.id, user.id, &user.screen_name)
+    });
+
+    let media_info = tweet
+        .extended_entities
+        .as_ref()
+        .map(|entities| {
+            entities
+                .media
+                .iter()
+                .map(|entity| entity.media_url_https.clone())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    let mut result = id.to_string();
+
+    if include_status {
+        result.push_str(",1");
+    }
+
+    if retweets {
+        result.push(',');
+        if let Some((id, user_id, screen_name)) = retweet_info {
+            result.push_str(&format!("{};{};{}", id, user_id, screen_name));
+        }
+    }
+    if media {
+        result.push_str(&format!(",{}", media_info.join(";")));
+    }
+    if withheld {
+        result.push_str(&format!(
+            ",{}",
+            tweet
+                .withheld_in_countries
+                .as_ref()
+                .map(|codes| codes.join(";"))
+                .unwrap_or_default()
+        ));
+    }
+
+    result
 }

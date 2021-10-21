@@ -113,6 +113,32 @@ impl Client {
         )
     }
 
+    pub fn lookup_tweets<I: IntoIterator<Item = u64>>(
+        &self,
+        ids: I,
+    ) -> LocalBoxStream<EggModeResult<(u64, Option<Tweet>)>> {
+        let mut ids = ids.into_iter().collect::<Vec<u64>>();
+        ids.sort_unstable();
+        ids.dedup();
+        ids.reverse();
+
+        stream::unfold(ids, move |mut ids| async move {
+            if ids.is_empty() {
+                None
+            } else if ids.len() <= TWEET_LOOKUP_PAGE_SIZE {
+                Some((egg_mode::tweet::lookup_map(ids, &self.app_token), vec![]))
+            } else {
+                let chunk = ids.split_off(ids.len() - TWEET_LOOKUP_PAGE_SIZE);
+                Some((egg_mode::tweet::lookup_map(chunk, &self.app_token), ids))
+            }
+        })
+        .map(Ok)
+        .try_buffer_unordered(100)
+        .map_ok(|res| stream::iter(res.response.into_iter().map(Ok)))
+        .try_flatten()
+        .boxed_local()
+    }
+
     pub fn follower_ids<T: Into<UserID>>(&self, acct: T) -> LocalBoxStream<EggModeResult<u64>> {
         let cursor = egg_mode::user::followers_ids(acct, &self.app_token)
             .with_page_size(USER_FOLLOWER_IDS_PAGE_SIZE);
@@ -296,26 +322,9 @@ impl Client {
         &self,
         ids: I,
     ) -> LocalBoxStream<EggModeResult<(u64, bool)>> {
-        let mut ids = ids.into_iter().collect::<Vec<u64>>();
-        ids.sort_unstable();
-        ids.dedup();
-        ids.reverse();
-
-        stream::unfold(ids, move |mut ids| async move {
-            if ids.is_empty() {
-                None
-            } else if ids.len() <= TWEET_LOOKUP_PAGE_SIZE {
-                Some((egg_mode::tweet::lookup_map(ids, &self.app_token), vec![]))
-            } else {
-                let chunk = ids.split_off(ids.len() - TWEET_LOOKUP_PAGE_SIZE);
-                Some((egg_mode::tweet::lookup_map(chunk, &self.app_token), ids))
-            }
-        })
-        .map(Ok)
-        .try_buffer_unordered(100)
-        .map_ok(|res| stream::iter(res.response.into_iter().map(|(k, v)| Ok((k, v.is_some())))))
-        .try_flatten()
-        .boxed_local()
+        self.lookup_tweets(ids)
+            .map_ok(|(k, v)| (k, v.is_some()))
+            .boxed_local()
     }
 
     pub fn user_timeline_stream<T: Into<UserID>>(
