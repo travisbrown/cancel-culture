@@ -74,6 +74,22 @@ const GET_REPLIES: &str = "
         WHERE tweet.twitter_id != reply_tweet.twitter_id AND user.twitter_id = ? AND user.screen_name like ?;
 ";
 
+const GET_REPLIES_TO: &str = "
+    SELECT
+        tweet.twitter_id, tweet.ts, tweet.user_twitter_id, reply_tweet.twitter_id, reply_tweet.ts, reply_tweet.user_twitter_id
+        FROM tweet
+        JOIN tweet AS reply_tweet ON reply_tweet.parent_twitter_id = tweet.twitter_id AND reply_tweet.twitter_id != tweet.twitter_id
+        WHERE tweet.user_twitter_id = ?;
+";
+
+const GET_REPLIES_FROM: &str = "
+    SELECT
+        tweet.twitter_id, tweet.ts, tweet.user_twitter_id, reply_tweet.twitter_id, reply_tweet.ts, reply_tweet.user_twitter_id
+        FROM tweet
+        JOIN tweet AS reply_tweet ON reply_tweet.parent_twitter_id = tweet.twitter_id AND reply_tweet.twitter_id != tweet.twitter_id
+        WHERE reply_tweet.user_twitter_id = ?;
+";
+
 pub type TweetStoreResult<T> = Result<T, TweetStoreError>;
 
 #[derive(Error, Debug)]
@@ -369,6 +385,96 @@ impl TweetStore {
 
         Ok(result)
     }
+
+    pub async fn for_each_interaction<
+        F: Fn((u64, u64, u64, String), (u64, u64, u64, String)) -> (),
+    >(
+        &self,
+        twitter_id: u64,
+        f: F,
+    ) -> TweetStoreResult<()> {
+        let connection = self.connection.read().await;
+        let mut select = connection.prepare_cached(GET_REPLIES_TO)?;
+
+        let mut seen = std::collections::HashSet::<u64>::new();
+
+        let results = select.query_and_then(params![SQLiteId(twitter_id)], |row| {
+            let reply_twitter_id = row.get::<usize, i64>(3)? as u64;
+
+            let result: TweetStoreResult<_> = if seen.contains(&reply_twitter_id) {
+                Ok(None)
+            } else {
+                seen.insert(reply_twitter_id);
+                let twitter_id = row.get::<usize, i64>(0)? as u64;
+                let twitter_ts = row.get::<usize, i64>(1)? as u64;
+                let user_twitter_id = row.get::<usize, i64>(2)? as u64;
+                //let screen_name: String = row.get(3)?;
+
+                let reply_twitter_ts = row.get::<usize, i64>(4)? as u64;
+                let reply_user_twitter_id = row.get::<usize, i64>(5)? as u64;
+                //let reply_screen_name: String = row.get(7)?;
+
+                Ok(Some((
+                    (twitter_id, twitter_ts, user_twitter_id, "".to_string()),
+                    (
+                        reply_twitter_id,
+                        reply_twitter_ts,
+                        reply_user_twitter_id,
+                        "".to_string(),
+                    ),
+                )))
+            };
+
+            result
+        })?;
+
+        for result in results {
+            if let Some((info, reply_info)) = result? {
+                f(info, reply_info);
+            }
+        }
+
+        let mut select = connection.prepare_cached(GET_REPLIES_FROM)?;
+
+        let results = select.query_and_then(params![SQLiteId(twitter_id)], |row| {
+            let reply_twitter_id = row.get::<usize, i64>(3)? as u64;
+
+            let result: TweetStoreResult<_> = if seen.contains(&reply_twitter_id) {
+                Ok(None)
+            } else {
+                seen.insert(reply_twitter_id);
+                let twitter_id = row.get::<usize, i64>(0)? as u64;
+                let twitter_ts = row.get::<usize, i64>(1)? as u64;
+                let user_twitter_id = row.get::<usize, i64>(2)? as u64;
+                //let screen_name: String = row.get(3)?;
+
+                let reply_twitter_ts = row.get::<usize, i64>(4)? as u64;
+                let reply_user_twitter_id = row.get::<usize, i64>(5)? as u64;
+                //let reply_screen_name: String = row.get(7)?;
+
+                Ok(Some((
+                    (twitter_id, twitter_ts, user_twitter_id, "".to_string()),
+                    (
+                        reply_twitter_id,
+                        reply_twitter_ts,
+                        reply_user_twitter_id,
+                        "".to_string(),
+                    ),
+                )))
+            };
+
+            result
+        })?;
+
+        for result in results {
+            if let Some((info, reply_info)) = result? {
+                f(info, reply_info);
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn get_users(&self, user_ids: &[u64]) -> TweetStoreResult<Vec<UserRecord>> {
         let connection = self.connection.read().await;
         let mut get_user_names = connection.prepare_cached(GET_USER_NAMES)?;

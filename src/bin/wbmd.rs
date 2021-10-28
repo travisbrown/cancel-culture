@@ -259,6 +259,39 @@ async fn main() -> Void {
                 }
             }
         }
+        SubCommand::Interactions { db } => {
+            let users = cli::read_stdin()?
+                .lines()
+                .map(|line| line.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let tweet_store = wbm::tweet::db::TweetStore::new(db, false)?;
+
+            for user_twitter_id in users {
+                tweet_store
+                    .for_each_interaction(
+                        user_twitter_id,
+                        |(twitter_id, twitter_ts, user_twitter_id, screen_name),
+                         (
+                            reply_twitter_id,
+                            reply_twitter_ts,
+                            reply_user_twitter_id,
+                            reply_screen_name,
+                        )| {
+                            println!(
+                                "{},{},{},{},{},{}",
+                                twitter_id,
+                                twitter_ts,
+                                user_twitter_id,
+                                reply_twitter_id,
+                                reply_twitter_ts,
+                                reply_user_twitter_id,
+                            );
+                        },
+                    )
+                    .await?;
+            }
+        }
     }
 
     log::logger().flush();
@@ -375,6 +408,11 @@ enum SubCommand {
         db: String,
     },
     Replies {
+        /// The database file
+        #[clap(short, long)]
+        db: String,
+    },
+    Interactions {
         /// The database file
         #[clap(short, long)]
         db: String,
