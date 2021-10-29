@@ -90,6 +90,16 @@ const GET_REPLIES_FROM: &str = "
         WHERE reply_tweet.user_twitter_id = ?;
 ";
 
+const GET_MOST_COMMON_SCREEN_NAME: &str = "
+    SELECT screen_name, COUNT(tweet_file.file_id) AS c
+        FROM user
+        JOIN tweet_file ON user_id = user.id
+        WHERE twitter_id = ?
+        GROUP BY screen_name
+        ORDER BY c DESC
+        LIMIT 1;
+";
+
 pub type TweetStoreResult<T> = Result<T, TweetStoreError>;
 
 #[derive(Error, Debug)]
@@ -473,6 +483,28 @@ impl TweetStore {
         }
 
         Ok(())
+    }
+
+    pub async fn get_most_common_screen_names(
+        &self,
+        user_ids: &[u64],
+    ) -> TweetStoreResult<HashMap<u64, Option<String>>> {
+        let connection = self.connection.read().await;
+        let mut stmt = connection.prepare_cached(GET_MOST_COMMON_SCREEN_NAME)?;
+        let mut result = std::collections::HashMap::new();
+
+        for (i, id) in user_ids.iter().enumerate() {
+            if i % 100000 == 0 {
+                log::info!("{}", i);
+            }
+
+            let screen_name = stmt
+                .query_row(params![SQLiteId(*id)], |row| Ok(row.get(0)?))
+                .optional()?;
+            result.insert(*id, screen_name);
+        }
+
+        Ok(result)
     }
 
     pub async fn get_users(&self, user_ids: &[u64]) -> TweetStoreResult<Vec<UserRecord>> {

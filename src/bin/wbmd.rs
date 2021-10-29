@@ -292,6 +292,30 @@ async fn main() -> Void {
                     .await?;
             }
         }
+        SubCommand::ScreenNames { db } => {
+            let users = cli::read_stdin()?
+                .lines()
+                .map(|line| line.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let tweet_store = wbm::tweet::db::TweetStore::new(db, false)?;
+
+            let result = tweet_store.get_most_common_screen_names(&users).await?;
+
+            let mut pairs: Vec<_> = result.iter().collect();
+            pairs.sort();
+
+            for (id, screen_name) in pairs {
+                match screen_name {
+                    Some(v) => {
+                        println!("{},{}", id, v);
+                    }
+                    None => {
+                        log::error!("Unknown ID: {}", id);
+                    }
+                }
+            }
+        }
     }
 
     log::logger().flush();
@@ -413,6 +437,11 @@ enum SubCommand {
         db: String,
     },
     Interactions {
+        /// The database file
+        #[clap(short, long)]
+        db: String,
+    },
+    ScreenNames {
         /// The database file
         #[clap(short, long)]
         db: String,
