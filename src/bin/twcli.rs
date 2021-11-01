@@ -103,7 +103,9 @@ async fn main() -> Void {
                 }
             }
         }
-        SubCommand::ScreenNames => {
+        SubCommand::ScreenNames {
+            include_screen_name,
+        } => {
             let stdin = std::io::stdin();
             let handle = stdin.lock();
             let ids = handle
@@ -129,8 +131,13 @@ async fn main() -> Void {
                             log::warn!("{:?}", user.created_at);
 
                             println!(
-                                "{},{},{},{},{},{},{}",
+                                "{},{}{},{},{},{},{},{}",
                                 user.id,
+                                if include_screen_name {
+                                    format!("{},", user.screen_name)
+                                } else {
+                                    "".to_string()
+                                },
                                 if user.verified { 1 } else { 0 },
                                 if user.protected { 1 } else { 0 },
                                 user.statuses_count,
@@ -190,7 +197,10 @@ struct Opts {
 
 #[derive(Parser)]
 enum SubCommand {
-    ScreenNames,
+    ScreenNames {
+        #[clap(long)]
+        include_screen_name: bool,
+    },
     UserInfo {
         #[clap(long)]
         db: String,

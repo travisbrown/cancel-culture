@@ -259,6 +259,63 @@ async fn main() -> Void {
                 }
             }
         }
+        SubCommand::Interactions { db } => {
+            let users = cli::read_stdin()?
+                .lines()
+                .map(|line| line.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let tweet_store = wbm::tweet::db::TweetStore::new(db, false)?;
+
+            for user_twitter_id in users {
+                tweet_store
+                    .for_each_interaction(
+                        user_twitter_id,
+                        |(twitter_id, twitter_ts, user_twitter_id, screen_name),
+                         (
+                            reply_twitter_id,
+                            reply_twitter_ts,
+                            reply_user_twitter_id,
+                            reply_screen_name,
+                        )| {
+                            println!(
+                                "{},{},{},{},{},{}",
+                                twitter_id,
+                                twitter_ts,
+                                user_twitter_id,
+                                reply_twitter_id,
+                                reply_twitter_ts,
+                                reply_user_twitter_id,
+                            );
+                        },
+                    )
+                    .await?;
+            }
+        }
+        SubCommand::ScreenNames { db } => {
+            let users = cli::read_stdin()?
+                .lines()
+                .map(|line| line.parse::<u64>())
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let tweet_store = wbm::tweet::db::TweetStore::new(db, false)?;
+
+            let result = tweet_store.get_most_common_screen_names(&users).await?;
+
+            let mut pairs: Vec<_> = result.iter().collect();
+            pairs.sort();
+
+            for (id, screen_name) in pairs {
+                match screen_name {
+                    Some(v) => {
+                        println!("{},{}", id, v);
+                    }
+                    None => {
+                        log::error!("Unknown ID: {}", id);
+                    }
+                }
+            }
+        }
     }
 
     log::logger().flush();
@@ -375,6 +432,16 @@ enum SubCommand {
         db: String,
     },
     Replies {
+        /// The database file
+        #[clap(short, long)]
+        db: String,
+    },
+    Interactions {
+        /// The database file
+        #[clap(short, long)]
+        db: String,
+    },
+    ScreenNames {
         /// The database file
         #[clap(short, long)]
         db: String,

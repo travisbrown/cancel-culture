@@ -703,7 +703,7 @@ fn tweet_to_report(
             entities
                 .media
                 .iter()
-                .map(|entity| entity.media_url_https.clone())
+                .map(|entity| entity.expanded_url.clone())
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
