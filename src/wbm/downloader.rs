@@ -1,4 +1,3 @@
-use super::super::wayback::Item;
 use super::valid::ValidStore;
 use bytes::Bytes;
 use reqwest::{redirect, Client};
@@ -8,6 +7,7 @@ use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use thiserror::Error;
+use wayback_rs::Item;
 
 #[derive(Error, Debug)]
 pub enum Error {

@@ -1,13 +1,13 @@
-use super::item::{self, Item};
 use reqwest::Client as RClient;
 use std::io::{BufReader, Read};
 use std::time::Duration;
 use thiserror::Error;
+use wayback_rs::Item;
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Item parsing error: {0}")]
-    ItemParsingError(#[from] item::Error),
+    ItemParsingError(#[from] wayback_rs::item::Error),
     #[error("HTTP client error: {0}")]
     HttpClientError(#[from] reqwest::Error),
     #[error("JSON decoding error: {0}")]
@@ -36,11 +36,12 @@ impl Client {
         rows.into_iter()
             .skip(1)
             .map(|row| {
-                Item::parse_optional(
+                Item::parse_optional_record(
                     row.get(0).map(|v| v.as_str()),
                     row.get(1).map(|v| v.as_str()),
                     row.get(2).map(|v| v.as_str()),
                     row.get(3).map(|v| v.as_str()),
+                    Some("0"),
                     row.get(4).map(|v| v.as_str()),
                 )
                 .map_err(From::from)

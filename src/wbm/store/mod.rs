@@ -9,7 +9,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Invalid item: {0}")]
-    InvalidItem(#[from] super::item::Error),
+    InvalidItem(#[from] wayback_rs::item::Error),
     #[error("Invalid item: {0}")]
     InvalidItemCsv(#[from] csv::Error),
     #[error("Invalid mapping file: {path:?}")]

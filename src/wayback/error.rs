@@ -2,19 +2,21 @@ use crate::twitter::store::wayback;
 use fantoccini::error::CmdError;
 use std::fmt::{Debug, Display, Formatter};
 use std::path::PathBuf;
+use thiserror::Error;
 use tokio::task::JoinError;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
-    ClientError(reqwest::Error),
+    ClientError(#[from] reqwest::Error),
+    ItemError(#[from] wayback_rs::item::Error),
     ItemParsingError(String),
-    ItemDecodingError(serde_json::Error),
-    FileIOError(std::io::Error),
-    StoreContentsDecodingError(csv::Error),
-    StoreContentsEncodingError(Box<csv::IntoInnerError<csv::Writer<Vec<u8>>>>),
-    BrowserError(CmdError),
-    TaskError(JoinError),
-    TweetStoreError(wayback::TweetStoreError),
+    ItemDecodingError(#[from] serde_json::Error),
+    FileIOError(#[from] std::io::Error),
+    StoreContentsDecodingError(#[from] csv::Error),
+    StoreContentsEncodingError(#[from] csv::IntoInnerError<csv::Writer<Vec<u8>>>),
+    BrowserError(#[from] CmdError),
+    TaskError(#[from] JoinError),
+    TweetStoreError(#[from] wayback::TweetStoreError),
     DataPathError(PathBuf),
 }
 
@@ -24,6 +26,7 @@ impl Display for Error {
     }
 }
 
+/*
 impl std::error::Error for Error {}
 
 impl From<reqwest::Error> for Error {
@@ -73,3 +76,4 @@ impl From<wayback::TweetStoreError> for Error {
         Error::TweetStoreError(e)
     }
 }
+*/

@@ -1,7 +1,8 @@
-use cancel_culture::wayback::{cdx::Client, Item};
+use cancel_culture::wayback::cdx::Client;
 use chrono::NaiveDate;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
+use wayback_rs::Item;
 
 const EXAMPLE_ITEM_QUERY: &str = "twitter.com/travisbrown/status/1323554460765925376";
 
@@ -11,6 +12,7 @@ fn example_item() -> Item {
         NaiveDate::from_ymd(2020, 11, 3).and_hms(9, 16, 10),
         "BHEPEG22C5COEOQD46QEFH4XK5SLN32A".to_string(),
         "text/html".to_string(),
+        0,
         Some(200),
     )
 }

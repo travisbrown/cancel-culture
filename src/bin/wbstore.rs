@@ -1,6 +1,6 @@
 use cancel_culture::{
     cli,
-    wayback::{cdx::Client, Item, Result, Store},
+    wayback::{cdx::Client, Result, Store},
 };
 use clap::Parser;
 use flate2::{write::GzEncoder, Compression, GzBuilder};
@@ -8,6 +8,7 @@ use futures::StreamExt;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufRead;
+use wayback_rs::Item;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -433,7 +434,7 @@ fn save_contents_gz(item: &Item, base: &str, content: &[u8]) -> Result<()> {
     log::info!("Saving {} to {:?} ({})", item.digest, base, item.url);
     let file = File::create(std::path::Path::new(base).join(format!("{}.gz", item.digest)))?;
     let mut gz = GzBuilder::new()
-        .filename(item.infer_filename())
+        .filename(item.make_filename())
         .write(file, Compression::default());
     gz.write_all(content)?;
     gz.finish()?;

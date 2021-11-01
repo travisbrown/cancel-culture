@@ -58,7 +58,7 @@ async fn main() -> Void {
                 log::info!("Saving {} to {:?}", actual, path);
                 let file = File::create(path.join(format!("{}.gz", actual)))?;
                 let mut gz = GzBuilder::new()
-                    .filename(item.infer_filename())
+                    .filename(item.make_filename())
                     .write(file, Compression::default());
                 gz.write_all(&result)?;
                 gz.finish()?;

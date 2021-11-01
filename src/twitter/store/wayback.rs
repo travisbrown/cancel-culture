@@ -1,11 +1,11 @@
 use crate::browser::twitter::parser::BrowserTweet;
 use crate::util::sqlite::{SQLiteDateTime, SQLiteId};
-use crate::wayback::Item;
 use futures_locks::RwLock;
 use rusqlite::{params, Connection, DropBehavior, OptionalExtension};
 use std::collections::HashSet;
 use std::path::Path;
 use thiserror::Error;
+use wayback_rs::Item;
 
 const DIGEST_SELECT: &str = "SELECT DISTINCT value FROM digest";
 const DIGEST_INSERT: &str = "INSERT OR IGNORE INTO digest (tweet_id, value, url) VALUES (?, ?, ?)";

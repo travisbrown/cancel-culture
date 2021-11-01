@@ -1,9 +1,10 @@
-use super::{super::item::Item, Error, Result};
+use super::{Error, Result};
 use csv::ReaderBuilder;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+use wayback_rs::Item;
 
 pub(super) struct ItemFileMap {
     pub(super) items: Vec<Item>,
@@ -23,11 +24,12 @@ impl ItemFileMap {
                 .records()
                 .map(|result| {
                     result.map_err(|error| error.into()).and_then(|row| {
-                        Item::parse_optional(
+                        Item::parse_optional_record(
                             row.get(0),
                             row.get(1),
                             row.get(2),
                             row.get(3),
+                            Some("0"),
                             row.get(4),
                         )
                         .map_err(Error::InvalidItem)

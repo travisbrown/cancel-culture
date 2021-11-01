@@ -1,4 +1,4 @@
-use super::{Item, Result};
+use super::Result;
 
 use crate::browser::twitter::parser::{self, BrowserTweet};
 use crate::twitter::store::wayback::TweetStore;
@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use wayback_rs::Item;
 
 struct Contents {
     by_url: HashMap<String, Vec<Item>>,
@@ -90,7 +91,7 @@ impl Store {
         if !contents.by_digest.contains_key(&item.digest) {
             let file = File::create(self.data_path(&item.digest))?;
             let mut gz = GzBuilder::new()
-                .filename(item.infer_filename())
+                .filename(item.make_filename())
                 .write(file, Compression::default());
             gz.write_all(&data)?;
             gz.finish()?;
@@ -107,7 +108,7 @@ impl Store {
             item.url.to_string(),
             item.timestamp(),
             item.digest.to_string(),
-            item.mimetype.to_string(),
+            item.mime_type.to_string(),
             item.status_code(),
         ])?;
 
@@ -210,13 +211,15 @@ impl Store {
                 .records()
                 .map(|record| {
                     record.map_err(|err| err.into()).and_then(|row| {
-                        Item::parse_optional(
+                        Item::parse_optional_record(
                             row.get(0),
                             row.get(1),
                             row.get(2),
                             row.get(3),
+                            Some("0"),
                             row.get(4),
                         )
+                        .map_err(super::Error::from)
                     })
                 })
                 .collect::<Result<Vec<Item>>>()?
@@ -388,7 +391,7 @@ impl Store {
                 item.url.to_string(),
                 item.timestamp(),
                 item.digest.to_string(),
-                item.mimetype.to_string(),
+                item.mime_type.to_string(),
                 item.status_code(),
             ])?;
         }
@@ -431,13 +434,16 @@ impl Store {
         Ok(())
     }
 
-    fn extract_tweets_from_path<P: AsRef<Path>>(p: P, mimetype: &str) -> Result<Vec<BrowserTweet>> {
+    fn extract_tweets_from_path<P: AsRef<Path>>(
+        p: P,
+        mime_type: &str,
+    ) -> Result<Vec<BrowserTweet>> {
         let path = p.as_ref();
 
         if path.is_file() {
             let mut file = File::open(path)?;
 
-            if mimetype == "application/json" {
+            if mime_type == "application/json" {
                 let mut doc = String::new();
                 let mut gz = GzDecoder::new(file);
                 gz.read_to_string(&mut doc)?;
@@ -470,7 +476,7 @@ impl Store {
                 let path = self.data_path(&item.digest);
 
                 Ok(tokio::spawn(async move {
-                    Self::extract_tweets_from_path(path, &item.mimetype)
+                    Self::extract_tweets_from_path(path, &item.mime_type)
                         .map(|tweets| (item, tweets))
                 }))
             })
@@ -614,7 +620,7 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::Item, Store};
+    use super::Store;
     use crate::twitter::store::wayback::TweetStore;
     use bytes::Bytes;
     use chrono::NaiveDate;
@@ -622,6 +628,7 @@ mod tests {
     use std::fs::File;
     use std::path::PathBuf;
     use tempfile::NamedTempFile;
+    use wayback_rs::Item;
 
     fn example_item() -> Item {
         Item::new(
@@ -629,6 +636,7 @@ mod tests {
             NaiveDate::from_ymd(2019, 9, 16).and_hms(23, 32, 35),
             "AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O".to_string(),
             "text/html".to_string(),
+            0,
             Some(200),
         )
     }
@@ -639,6 +647,7 @@ mod tests {
             NaiveDate::from_ymd(2019, 11, 13).and_hms(17, 6, 29),
             "ZHYT52YPEOCHJD5FZINSDYXGQZI22WJ4".to_string(),
             "text/html".to_string(),
+            0,
             Some(200),
         )
     }
@@ -649,6 +658,7 @@ mod tests {
             NaiveDate::from_ymd(2021, 1, 1).and_hms(12, 0, 0),
             "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ".to_string(),
             "text/html".to_string(),
+            0,
             Some(200),
         )
     }
@@ -660,6 +670,7 @@ mod tests {
             NaiveDate::from_ymd(2020, 9, 14).and_hms(15, 36, 27),
             "5DECQVIU7Y3F276SIBAKKCRGDMVXJYFV".to_string(),
             "text/html".to_string(),
+            0,
             Some(200),
         )
     }

@@ -1,4 +1,4 @@
-use super::{Item, Result, Store};
+use super::{Result, Store};
 use bytes::Bytes;
 use flate2::{Compression, GzBuilder};
 use futures::{Future, FutureExt, StreamExt, TryStreamExt};
@@ -9,6 +9,7 @@ use std::io::{BufReader, Read, Write};
 use std::ops::Deref;
 use std::path::Path;
 use std::time::Duration;
+use wayback_rs::Item;
 
 pub struct Client {
     underlying: RClient,
@@ -38,10 +39,39 @@ impl Client {
         }
     }
 
+    fn from_row(row: &[String]) -> Result<Item> {
+        if row.len() == 5 {
+            Item::parse_optional_record(
+                Some(&row[0]),
+                Some(&row[1]),
+                Some(&row[2]),
+                Some(&row[3]),
+                Some("0"),
+                Some(&row[4]),
+            )
+            .map_err(super::Error::from)
+        } else if row.len() == 6 {
+            Item::parse_optional_record(
+                Some(&row[0]),
+                Some(&row[1]),
+                Some(&row[2]),
+                Some(&row[3]),
+                Some(&row[4]),
+                Some(&row[5]),
+            )
+            .map_err(super::Error::from)
+        } else {
+            Err(super::Error::ItemParsingError(format!(
+                "Invalid item fields: {:?}",
+                row
+            )))
+        }
+    }
+
     fn decode_rows(rows: Vec<Vec<String>>) -> Result<Vec<Item>> {
         rows.into_iter()
             .skip(1)
-            .map(|row| Item::from_row(&row))
+            .map(|row| Self::from_row(&row))
             .collect()
     }
 
@@ -102,7 +132,7 @@ impl Client {
             log::info!("Saving {} to {:?} ({})", actual, good_dir, item.url);
             let file = File::create(good_dir.join(format!("{}.gz", actual)))?;
             let mut gz = GzBuilder::new()
-                .filename(item.infer_filename())
+                .filename(item.make_filename())
                 .write(file, Compression::default());
             gz.write_all(&result)?;
             gz.finish()?;
@@ -110,7 +140,7 @@ impl Client {
             log::info!("Saving {} to {:?} ({})", item.digest, bad_dir, item.url);
             let file = File::create(bad_dir.join(format!("{}.gz", item.digest)))?;
             let mut gz = GzBuilder::new()
-                .filename(item.infer_filename())
+                .filename(item.make_filename())
                 .write(file, Compression::default());
             gz.write_all(&result)?;
             gz.finish()?;

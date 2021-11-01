@@ -389,8 +389,8 @@ async fn main() -> Result<()> {
                             .into_iter()
                             .filter(|item| item.status.is_none() || item.status == Some(200))
                             .collect::<Vec<_>>();
-                        let last = valid.iter().map(|item| item.archived).max();
-                        let first = valid.into_iter().min_by_key(|item| item.archived);
+                        let last = valid.iter().map(|item| item.archived_at).max();
+                        let first = valid.into_iter().min_by_key(|item| item.archived_at);
 
                         first.zip(last).map(|(f, l)| (id, l, f))
                     })
@@ -402,12 +402,12 @@ async fn main() -> Result<()> {
 
             let selected = candidates.into_iter().take(limit.unwrap_or(usize::MAX));
 
-            let mut by_id: HashMap<u64, wayback::Item> = HashMap::new();
+            let mut by_id: HashMap<u64, wayback_rs::Item> = HashMap::new();
 
             for (id, _, current) in selected {
                 match by_id.get(&id) {
                     Some(latest) => {
-                        if latest.archived < current.archived {
+                        if latest.archived_at < current.archived_at {
                             by_id.insert(id, current);
                         }
                     }
@@ -428,7 +428,7 @@ async fn main() -> Result<()> {
 
             use cancel_culture::browser::twitter::parser::BrowserTweet;
 
-            let mut report_items = HashMap::<u64, (BrowserTweet, wayback::Item)>::new();
+            let mut report_items = HashMap::<u64, (BrowserTweet, wayback_rs::Item)>::new();
 
             if let Some(s) = store.as_ref() {
                 let mut items = Vec::with_capacity(by_id.len());
