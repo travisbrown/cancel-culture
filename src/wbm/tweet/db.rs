@@ -100,6 +100,15 @@ const GET_MOST_COMMON_SCREEN_NAME: &str = "
         LIMIT 1;
 ";
 
+const GET_USER_TWEETS: &str = "
+    SELECT DISTINCT tweet.twitter_id, tweet.ts / 1000 AS ts, user_twitter_id, screen_name, content
+        FROM tweet
+        JOIN tweet_file ON tweet_id = tweet.id
+        JOIN user ON user.id = user_id
+        WHERE user_twitter_id = ?
+        AND tweet.ts >= ? and tweet.ts <= ?;
+";
+
 pub type TweetStoreResult<T> = Result<T, TweetStoreError>;
 
 #[derive(Error, Debug)]
@@ -483,6 +492,32 @@ impl TweetStore {
         }
 
         Ok(())
+    }
+
+    pub async fn get_tweets_for_user(
+        &self,
+        user_id: u64,
+        start_ts: u64,
+        end_ts: u64,
+    ) -> TweetStoreResult<Vec<(u64, u64, u64, String, String)>> {
+        let connection = self.connection.read().await;
+        let mut stmt = connection.prepare_cached(GET_USER_TWEETS)?;
+
+        let tweets = stmt
+            .query_map(
+                params![SQLiteId(user_id), SQLiteId(start_ts), SQLiteId(end_ts)],
+                |row| {
+                    let twitter_id = row.get::<usize, i64>(0)? as u64;
+                    let ts = row.get::<usize, i64>(1)? as u64;
+                    let user_twitter_id = row.get::<usize, i64>(2)? as u64;
+                    let screen_name = row.get(3)?;
+                    let contents = row.get(4)?;
+                    Ok((twitter_id, ts, user_twitter_id, screen_name, contents))
+                },
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(tweets)
     }
 
     pub async fn get_most_common_screen_names(
