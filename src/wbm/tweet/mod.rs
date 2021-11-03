@@ -50,10 +50,18 @@ fn extract_tweets_from_path<P: AsRef<Path>>(
 }
 
 pub async fn export_tweets(store: &ValidStore, tweet_store: &db::TweetStore) -> Result<()> {
-    use futures::TryStreamExt;
+    use futures::{StreamExt, TryStreamExt};
 
     Ok(
         futures::stream::iter(store.paths().map(|result| result.map_err(Error::from)))
+            .filter_map(|res| async {
+                match res {
+                    Err(Error::ValidStoreError(super::valid::Error::Unexpected { path: _ })) => {
+                        None
+                    }
+                    other => Some(other),
+                }
+            })
             .try_for_each_concurrent(4, |(digest, path)| async move {
                 if tweet_store.check_digest(&digest).await?.is_none() {
                     let ts = tweet_store.clone();
