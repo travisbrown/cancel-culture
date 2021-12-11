@@ -186,6 +186,18 @@ impl Store {
     }
 
     pub fn load<P: AsRef<Path>>(base_dir: P) -> Result<Store> {
+        let base_dir_path = base_dir.as_ref();
+
+        if !base_dir_path.exists() {
+            return Err(super::Error::DataPathError(base_dir_path.to_path_buf()));
+        }
+
+        let data_dir_path = base_dir_path.join(Store::DATA_DIR_NAME);
+
+        if !data_dir_path.exists() {
+            std::fs::create_dir(data_dir_path)?;
+        }
+
         let contents_path = Store::contents_path(&base_dir);
 
         let items = if contents_path.is_file() {
