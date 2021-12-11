@@ -143,49 +143,6 @@ impl Downloader {
         Ok(())
     }
 
-    // Download file to a subdirectory of the given directory based on whether its digest matches
-    /*pub async fn download_gz_to_dir<P: AsRef<Path>>(&self, base: &P, item: &Item) -> Result<()> {
-        let mut good_dir = base.as_ref().to_path_buf();
-        good_dir.push("good");
-        let mut bad_dir = base.as_ref().to_path_buf();
-        bad_dir.push("bad");
-
-        if !good_dir.is_dir() {
-            std::fs::create_dir(&good_dir)?;
-        }
-
-        if !bad_dir.is_dir() {
-            std::fs::create_dir(&bad_dir)?;
-        }
-
-        let result = tryhard::retry_fn(move || self.download(item, true))
-            .retries(7)
-            .exponential_backoff(Duration::from_millis(250))
-            .await?;
-
-        let actual = Store::compute_digest(&mut result.deref())?;
-
-        if actual == item.digest {
-            log::info!("Saving {} to {:?} ({})", actual, good_dir, item.url);
-            let file = File::create(good_dir.join(format!("{}.gz", actual)))?;
-            let mut gz = GzBuilder::new()
-                .filename(item.infer_filename())
-                .write(file, Compression::default());
-            gz.write_all(&result)?;
-            gz.finish()?;
-        } else {
-            log::info!("Saving {} to {:?} ({})", item.digest, bad_dir, item.url);
-            let file = File::create(bad_dir.join(format!("{}.gz", item.digest)))?;
-            let mut gz = GzBuilder::new()
-                .filename(item.infer_filename())
-                .write(file, Compression::default());
-            gz.write_all(&result)?;
-            gz.finish()?;
-        }
-
-        Ok(())
-    }*/
-
     fn read_mappings<P: AsRef<Path>>(path: &P) -> Result<HashMap<String, String>> {
         let reader = BufReader::new(File::open(path)?);
 

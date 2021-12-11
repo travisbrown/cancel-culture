@@ -65,7 +65,7 @@ pub async fn export_tweets(store: &ValidStore, tweet_store: &db::TweetStore) -> 
             .try_for_each_concurrent(4, |(digest, path)| async move {
                 if tweet_store.check_digest(&digest).await?.is_none() {
                     let ts = tweet_store.clone();
-                    let act = tokio::task::spawn_local(async move {
+                    let act = tokio::task::spawn(async move {
                         if let Ok(Some((status_id, tweets))) = extract_tweets_from_path(path) {
                             ts.add_tweets(&digest, status_id, &tweets).await.unwrap();
                         }
