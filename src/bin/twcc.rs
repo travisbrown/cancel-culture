@@ -4,7 +4,7 @@ use cancel_culture::{
     twitter::{extract_status_id, Client, Error, Result},
     wayback,
 };
-use clap::{crate_authors, crate_version, Parser};
+use clap::Parser;
 use egg_mode::{tweet::Tweet, user::TwitterUser};
 use futures::TryStreamExt;
 use itertools::Itertools;
@@ -543,7 +543,7 @@ fn escape_tweet_text(text: &str) -> String {
 }
 
 #[derive(Parser)]
-#[clap(name = "twcc", version = crate_version!(), author = crate_authors!())]
+#[clap(name = "twcc", version, author)]
 struct Opts {
     /// TOML file containing Twitter API keys
     #[clap(short, long, default_value = "keys.toml")]
@@ -557,32 +557,20 @@ struct Opts {
 
 #[derive(Parser)]
 enum SubCommand {
-    #[clap(version = crate_version!(), author = crate_authors!())]
     BlockedFollows(BlockedFollows),
-    #[clap(version = crate_version!(), author = crate_authors!())]
     FollowerReport(FollowerReport),
-    #[clap(version = crate_version!(), author = crate_authors!())]
     LookupReply(LookupReply),
     /// Check whether a list of status IDs (from stdin) still exist
-    #[clap(version = crate_version!(), author = crate_authors!())]
     CheckExistence,
-    #[clap(version = crate_version!(), author = crate_authors!())]
     DeletedTweets(DeletedTweets),
-    #[clap(version = crate_version!(), author = crate_authors!())]
     ListFollowers(ListFollowers),
-    #[clap(version = crate_version!(), author = crate_authors!())]
     ListFriends(ListFriends),
-    #[clap(version = crate_version!(), author = crate_authors!())]
     ListBlocks(ListBlocks),
-    #[clap(version = crate_version!(), author = crate_authors!())]
     ListTweets(ListTweets),
-    #[clap(version = crate_version!(), author = crate_authors!())]
     LookupTweets(LookupTweets),
     /// Block a list of user IDs (from stdin)
-    #[clap(version = crate_version!(), author = crate_authors!())]
     ImportBlocks,
     /// List everyone you follow or who follows you who is not a mutual
-    #[clap(version = crate_version!(), author = crate_authors!())]
     ListUnmutuals,
 }
 

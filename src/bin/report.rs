@@ -1,6 +1,6 @@
 use cancel_culture::browser::twitter::parser::BrowserTweet;
 use cancel_culture::{cli, wbm};
-use clap::{crate_authors, crate_version, Parser};
+use clap::Parser;
 use csv::ReaderBuilder;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
@@ -122,7 +122,7 @@ async fn main() -> Void {
 }
 
 #[derive(Parser)]
-#[clap(name = "report", version = crate_version!(), author = crate_authors!())]
+#[clap(name = "report", version, author)]
 struct Opts {
     /// Level of verbosity
     #[clap(short, long, parse(from_occurrences))]

@@ -405,9 +405,7 @@ impl TweetStore {
         Ok(result)
     }
 
-    pub async fn for_each_interaction<
-        F: Fn((u64, u64, u64, String), (u64, u64, u64, String)) -> (),
-    >(
+    pub async fn for_each_interaction<F: Fn((u64, u64, u64, String), (u64, u64, u64, String))>(
         &self,
         twitter_id: u64,
         f: F,
@@ -534,7 +532,7 @@ impl TweetStore {
             }
 
             let screen_name = stmt
-                .query_row(params![SQLiteId(*id)], |row| Ok(row.get(0)?))
+                .query_row(params![SQLiteId(*id)], |row| row.get(0))
                 .optional()?;
             result.insert(*id, screen_name);
         }

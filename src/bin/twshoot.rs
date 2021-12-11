@@ -1,5 +1,5 @@
 use cancel_culture::{browser, twitter};
-use clap::{crate_authors, crate_version, Parser};
+use clap::Parser;
 use image::DynamicImage;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -63,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[derive(Parser)]
-#[clap(version = crate_version!(), author = crate_authors!())]
+#[clap(version, author)]
 struct Opts {
     /// Either a tweet URL or a status ID
     status: String,

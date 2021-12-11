@@ -1,5 +1,5 @@
 use cancel_culture::{cli, twitter::Client};
-use clap::{crate_authors, crate_version, Parser};
+use clap::Parser;
 use egg_mode::user::UserID;
 use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
@@ -183,7 +183,7 @@ async fn main() -> Void {
 }
 
 #[derive(Parser)]
-#[clap(name = "twcli", version = crate_version!(), author = crate_authors!())]
+#[clap(name = "twcli", version, author)]
 struct Opts {
     /// TOML file containing Twitter API keys
     #[clap(short, long, default_value = "keys.toml")]

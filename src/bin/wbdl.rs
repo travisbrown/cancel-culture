@@ -2,7 +2,7 @@ use cancel_culture::{
     cli,
     wayback::{cdx::Client, Result, Store},
 };
-use clap::{crate_authors, crate_version, Parser};
+use clap::Parser;
 use std::collections::HashSet;
 use std::io::BufRead;
 
@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
 }
 
 #[derive(Parser)]
-#[clap(name = "wbdl", version = crate_version!(), author = crate_authors!())]
+#[clap(name = "wbdl", version, author)]
 struct Opts {
     /// Wayback Machine store directory
     #[clap(short, long, default_value = "wayback")]
@@ -85,13 +85,10 @@ struct Opts {
 
 #[derive(Parser)]
 enum SubCommand {
-    #[clap(version = crate_version!(), author = crate_authors!())]
     Query(CdxQuery),
     /// Perform a search for a batch of queries from stdin
-    #[clap(version = crate_version!(), author = crate_authors!())]
     Batch,
     /// Download items given CDX search results
-    #[clap(version = crate_version!(), author = crate_authors!())]
     FromJson,
 }
 

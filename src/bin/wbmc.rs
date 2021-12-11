@@ -1,5 +1,5 @@
 use cancel_culture::cli;
-use clap::{crate_authors, crate_version, Parser};
+use clap::Parser;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -37,7 +37,7 @@ async fn main() -> Void {
 }
 
 #[derive(Parser)]
-#[clap(name = "wbmc", version = crate_version!(), author = crate_authors!())]
+#[clap(name = "wbmc", version, author)]
 struct Opts {
     /// Level of verbosity
     #[clap(short, long, parse(from_occurrences))]
