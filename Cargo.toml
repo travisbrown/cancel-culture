@@ -21,7 +21,7 @@ file_diff = "1.0"
 flate2 = "1.0"
 fs_extra = "1.2"
 futures = "0.3"
-futures-locks = "0.7"
+futures-locks = "0.6"
 futures-util = "0.3"
 html5ever = "0.25"
 hyper = { version = "0.14", features = [ "stream" ] }
@@ -47,7 +47,7 @@ tempfile = "3.2"
 thiserror = "1.0"
 time = "0.3"
 tinytemplate = "1.0"
-tokio = { version = "1.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.14", features = ["macros", "rt-multi-thread"] }
 tokio-test = "0.4"
 toml = "0.5"
 tryhard = "0.4"
