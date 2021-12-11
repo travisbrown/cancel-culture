@@ -2,7 +2,7 @@ use cancel_culture::{
     cli,
     wayback::{cdx::Client, Item, Result, Store},
 };
-use clap::{crate_authors, crate_version, Parser};
+use clap::Parser;
 use flate2::{write::GzEncoder, Compression, GzBuilder};
 use futures::StreamExt;
 use std::collections::HashSet;
@@ -336,7 +336,7 @@ async fn main() -> Result<()> {
 }
 
 #[derive(Parser)]
-#[clap(name = "wbstore", version = crate_version!(), author = crate_authors!())]
+#[clap(name = "wbstore", version, author)]
 struct Opts {
     /// Wayback Machine store directory
     #[clap(short, long, default_value = "wayback")]
@@ -353,10 +353,8 @@ struct Opts {
 
 #[derive(Parser)]
 enum SubCommand {
-    #[clap(version = crate_version!(), author = crate_authors!())]
     Export(ExportQuery),
     /// Compute digest for all files in the store's data directory
-    #[clap(version = crate_version!(), author = crate_authors!())]
     ComputeDigests,
     ComputeDigestsRaw,
     Merge(MergeCommand),
@@ -365,7 +363,6 @@ enum SubCommand {
     FixRedirects(FixCommand),
     GuessRedirects(FixCommand),
     /// Compute digest for the input from stdin
-    #[clap(version = crate_version!(), author = crate_authors!())]
     Digest,
     CheckValid(CheckValidCommand),
     ListValid(CheckValidCommand),

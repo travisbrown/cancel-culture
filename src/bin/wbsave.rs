@@ -1,5 +1,5 @@
 use cancel_culture::{cli, wayback};
-use clap::{crate_authors, crate_version, Parser};
+use clap::Parser;
 use std::io::BufRead;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
@@ -38,7 +38,7 @@ async fn main() -> Void {
 }
 
 #[derive(Parser)]
-#[clap(version = crate_version!(), author = crate_authors!())]
+#[clap(version, author)]
 struct Opts {
     #[clap(short = 'u', long)]
     username: String,

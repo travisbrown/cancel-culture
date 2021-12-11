@@ -1,5 +1,5 @@
 use cancel_culture::{cli, wbm, wbm::digest, wbm::valid};
-use clap::{crate_authors, crate_version, Parser};
+use clap::Parser;
 use futures::StreamExt;
 use std::collections::HashSet;
 use std::fs::File;
@@ -324,7 +324,7 @@ async fn main() -> Void {
 }
 
 #[derive(Parser)]
-#[clap(name = "wbmd", version = crate_version!(), author = crate_authors!())]
+#[clap(name = "wbmd", version, author)]
 struct Opts {
     /// Level of verbosity
     #[clap(short, long, parse(from_occurrences))]

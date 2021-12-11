@@ -1,5 +1,5 @@
 use cancel_culture::{browser::twitter::parser, cli};
-use clap::{crate_authors, crate_version, Parser};
+use clap::Parser;
 use std::fs::File;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
@@ -30,7 +30,7 @@ async fn main() -> Void {
 }
 
 #[derive(Parser)]
-#[clap(name = "details", version = crate_version!(), author = crate_authors!())]
+#[clap(name = "details", version, author)]
 struct Opts {
     /// Level of verbosity
     #[clap(short, long, parse(from_occurrences))]
