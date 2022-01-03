@@ -198,6 +198,28 @@ async fn main() -> Void {
                 ])?;
             }
         }
+        SubCommand::GetForUser { db, user_id } => {
+            let tweet_store = wbm::tweet::db::TweetStore::new(db, false)?;
+            let mut results = tweet_store
+                .get_tweets_for_user(user_id, 0, 1640280351088)
+                .await?;
+            results.sort_by_key(|(_, ts, _, _, _)| ts.clone());
+
+            let mut out = csv::WriterBuilder::new().from_writer(std::io::stdout());
+            let space_re = regex::Regex::new(r" +").unwrap();
+
+            for (status_id, ts, user_id, screen_name, content) in results {
+                out.write_record(&[
+                    user_id.to_string(),
+                    screen_name,
+                    status_id.to_string(),
+                    ts.to_string(),
+                    space_re
+                        .replace_all(&content.trim().replace("\n", "\\n"), " ")
+                        .to_string(),
+                ])?;
+            }
+        }
         SubCommand::Retweets { dir, known } => {
             let mut known_retweet_status_ids = HashSet::new();
 
@@ -430,6 +452,13 @@ enum SubCommand {
         /// The database file
         #[clap(short, long)]
         db: String,
+    },
+    GetForUser {
+        /// The database file
+        #[clap(short, long)]
+        db: String,
+        #[clap(short, long)]
+        user_id: u64,
     },
     Replies {
         /// The database file
