@@ -61,21 +61,31 @@ pub async fn export_tweets(store: &ValidStore, tweet_store: &db::TweetStore) -> 
                 other => Some(other),
             }
         })
-        .try_filter_map(|(digest, path)| async move {
-            if tweet_store.check_digest(&digest).await?.is_none() {
-                Ok(Some(
-                    tokio::task::spawn(async move {
-                        extract_tweets_from_path(path).map(|outer_option| {
-                            outer_option.map(|(status_id, tweets)| (digest, status_id, tweets))
+        .try_filter_map(|(digest, path)| {
+            let digest_clone = digest.clone();
+            async move {
+                if tweet_store.check_digest(&digest).await?.is_none() {
+                    Ok(Some(
+                        tokio::task::spawn(async move {
+                            extract_tweets_from_path(path).map(|outer_option| {
+                                outer_option
+                                    .map(|(status_id, tweets)| (digest_clone, status_id, tweets))
+                            })
                         })
-                    })
-                    .map(|res| match res {
-                        Ok(inner_res) => inner_res,
-                        Err(error) => Err(Error::from(error)),
-                    }),
-                ))
-            } else {
-                Ok(None)
+                        .then(move |res| async move {
+                            match res {
+                                Ok(Err(Error::IOError(underlying))) => {
+                                    log::warn!("Error parsing {}: {:?}", digest, underlying);
+                                    Ok(None)
+                                }
+                                Ok(inner_res) => inner_res,
+                                Err(error) => Err(Error::from(error)),
+                            }
+                        }),
+                    ))
+                } else {
+                    Ok(None)
+                }
             }
         })
         .try_buffer_unordered(4)
