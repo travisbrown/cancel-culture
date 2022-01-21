@@ -11,17 +11,17 @@ license = "MPL-2.0"
 anyhow = "1.0"
 bytes = "1.0"
 chrono = "0.4"
-clap = { version = "3.0.0-rc.4", features = ["derive"] }
+clap = { version = "3", features = ["derive"] }
 csv="1.1"
 data-encoding = "2.3"
 displaydoc = "0.2"
 egg-mode = "0.16"
-fantoccini = { version = "0.17", features = [ "rustls-tls" ] }
+fantoccini = { version = "0.18", features = [ "rustls-tls" ] }
 file_diff = "1.0"
 flate2 = "1.0"
 fs_extra = "1.2"
 futures = "0.3"
-futures-locks = "0.6"
+futures-locks = "0.7"
 futures-util = "0.3"
 html5ever = "0.25"
 hyper = { version = "0.14", features = [ "stream" ] }
@@ -47,7 +47,7 @@ tempfile = "3.2"
 thiserror = "1.0"
 time = "0.3"
 tinytemplate = "1.0"
-tokio = { version = "1.14", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tokio-test = "0.4"
 toml = "0.5"
 tryhard = "0.4"

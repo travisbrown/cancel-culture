@@ -16,6 +16,8 @@ pub enum Error {
     TweetStoreError(#[from] db::TweetStoreError),
     #[error("ValidStore error")]
     ValidStoreError(#[from] super::valid::Error),
+    #[error("Task error")]
+    Task(#[from] tokio::task::JoinError),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -50,31 +52,47 @@ fn extract_tweets_from_path<P: AsRef<Path>>(
 }
 
 pub async fn export_tweets(store: &ValidStore, tweet_store: &db::TweetStore) -> Result<()> {
-    use futures::{StreamExt, TryStreamExt};
+    use futures::{FutureExt, StreamExt, TryStreamExt};
 
-    Ok(
-        futures::stream::iter(store.paths().map(|result| result.map_err(Error::from)))
-            .filter_map(|res| async {
-                match res {
-                    Err(Error::ValidStoreError(super::valid::Error::Unexpected { path: _ })) => {
-                        None
-                    }
-                    other => Some(other),
-                }
-            })
-            .try_for_each_concurrent(4, |(digest, path)| async move {
+    futures::stream::iter(store.paths().map(|result| result.map_err(Error::from)))
+        .filter_map(|res| async {
+            match res {
+                Err(Error::ValidStoreError(super::valid::Error::Unexpected { path: _ })) => None,
+                other => Some(other),
+            }
+        })
+        .try_filter_map(|(digest, path)| {
+            let digest_clone = digest.clone();
+            async move {
                 if tweet_store.check_digest(&digest).await?.is_none() {
-                    let ts = tweet_store.clone();
-                    let act = tokio::task::spawn(async move {
-                        if let Ok(Some((status_id, tweets))) = extract_tweets_from_path(path) {
-                            ts.add_tweets(&digest, status_id, &tweets).await.unwrap();
-                        }
-                    });
-
-                    act.await.unwrap()
+                    Ok(Some(
+                        tokio::task::spawn(async move {
+                            extract_tweets_from_path(path).map(|outer_option| {
+                                outer_option
+                                    .map(|(status_id, tweets)| (digest_clone, status_id, tweets))
+                            })
+                        })
+                        .then(move |res| async move {
+                            match res {
+                                Ok(Err(Error::IOError(underlying))) => {
+                                    log::warn!("Error parsing {}: {:?}", digest, underlying);
+                                    Ok(None)
+                                }
+                                Ok(inner_res) => inner_res,
+                                Err(error) => Err(Error::from(error)),
+                            }
+                        }),
+                    ))
+                } else {
+                    Ok(None)
                 }
-                Ok(())
-            })
-            .await?,
-    )
+            }
+        })
+        .try_buffer_unordered(4)
+        .try_filter_map(|maybe_content| async { Ok(maybe_content) })
+        .try_for_each(|(digest, status_id, tweets)| async move {
+            tweet_store.add_tweets(&digest, status_id, &tweets).await?;
+            Ok(())
+        })
+        .await
 }
