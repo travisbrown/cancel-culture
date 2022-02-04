@@ -26,7 +26,7 @@ futures-util = "0.3"
 html5ever = "0.25"
 hyper = { version = "0.14", features = [ "stream" ] }
 hyper-tls = "0.5"
-image = "0.23"
+image = "0.24"
 itertools = "0.10"
 lazy_static = "1.4"
 libsqlite3-sys = "0.23"
