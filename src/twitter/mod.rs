@@ -66,14 +66,14 @@ impl Client {
     pub async fn from_key_pairs(
         consumer: KeyPair,
         access: KeyPair,
-    ) -> std::result::Result<Client, egg_mode::error::Error> {
+    ) -> std::result::Result<Self, egg_mode::error::Error> {
         let app_token = egg_mode::auth::bearer_token(&consumer).await?;
         let token = Token::Access { consumer, access };
         let user = egg_mode::auth::verify_tokens(&token).await?.response;
-        Client::new(token, app_token, user).await
+        Self::new(token, app_token, user).await
     }
 
-    pub async fn from_config_file<P: AsRef<Path>>(path: P) -> Result<Client> {
+    pub async fn from_config_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         let contents =
             fs::read_to_string(path.clone()).map_err(|e| Error::ConfigReadError(e, path))?;
@@ -191,6 +191,64 @@ impl Client {
 
         for chunk in chunks {
             futs.push(egg_mode::user::lookup(chunk.to_vec(), &self.app_token).boxed_local());
+        }
+
+        let iter = futs.into_iter();
+
+        self.app_limited_client
+            .make_stream(iter.peekable(), Method::USER_LOOKUP)
+    }
+
+    fn multiple_names_param<T: Into<UserID>, I: IntoIterator<Item = T>>(
+        accts: I,
+    ) -> (String, String) {
+        let mut ids = Vec::new();
+        let mut names = Vec::new();
+
+        for x in accts {
+            match x.into() {
+                egg_mode::user::UserID::ID(id) => ids.push(id.to_string()),
+                egg_mode::user::UserID::ScreenName(name) => names.push(name),
+            }
+        }
+
+        (ids.join(","), names.join(","))
+    }
+
+    async fn user_lookup_json<T: Into<UserID>, I: IntoIterator<Item = T>>(
+        &self,
+        ids: I,
+    ) -> EggModeResult<Response<Vec<serde_json::Value>>> {
+        let (id_param, name_param) = Self::multiple_names_param(ids);
+
+        let params = egg_mode::raw::ParamList::new()
+            .extended_tweets()
+            .add_param("user_id", id_param)
+            .add_param("screen_name", name_param);
+
+        let request = egg_mode::raw::request_post(
+            "https://api.twitter.com/1.1/users/lookup.json",
+            &self.app_token,
+            Some(&params),
+        );
+
+        egg_mode::raw::response_json(request).await
+    }
+
+    pub fn lookup_users_json<T, I: IntoIterator<Item = T>>(
+        &self,
+        ids: I,
+    ) -> LocalBoxStream<EggModeResult<serde_json::Value>>
+    where
+        T: Into<UserID> + Unpin + Send,
+    {
+        let mut futs = vec![];
+
+        let user_ids = ids.into_iter().map(Into::into).collect::<Vec<UserID>>();
+        let chunks = user_ids.chunks(USER_LOOKUP_PAGE_SIZE);
+
+        for chunk in chunks {
+            futs.push(self.user_lookup_json(chunk.to_vec()).boxed_local());
         }
 
         let iter = futs.into_iter();

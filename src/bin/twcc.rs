@@ -25,16 +25,19 @@ async fn main() -> Result<()> {
             ids_only,
             screen_name,
         }) => {
-            let ids = match screen_name {
-                Some(name) => client.follower_ids(name).try_collect::<Vec<_>>().await?,
-                None => client.follower_ids_self().try_collect::<Vec<_>>().await?,
-            };
+            let stream = screen_name
+                .map(|name| client.follower_ids(name))
+                .unwrap_or_else(|| client.follower_ids_self());
 
             if ids_only {
-                for id in ids {
-                    println!("{}", id);
-                }
+                stream
+                    .try_for_each(|id| async move {
+                        println!("{}", id);
+                        Ok(())
+                    })
+                    .await?;
             } else {
+                let ids = stream.try_collect::<Vec<_>>().await?;
                 let users = client.lookup_users(ids).try_collect::<Vec<_>>().await?;
                 print_user_report(&users);
             }
@@ -44,16 +47,19 @@ async fn main() -> Result<()> {
             ids_only,
             screen_name,
         }) => {
-            let ids = match screen_name {
-                Some(name) => client.followed_ids(name).try_collect::<Vec<_>>().await?,
-                None => client.followed_ids_self().try_collect::<Vec<_>>().await?,
-            };
+            let stream = screen_name
+                .map(|name| client.followed_ids(name))
+                .unwrap_or_else(|| client.followed_ids_self());
 
             if ids_only {
-                for id in ids {
-                    println!("{}", id);
-                }
+                stream
+                    .try_for_each(|id| async move {
+                        println!("{}", id);
+                        Ok(())
+                    })
+                    .await?;
             } else {
+                let ids = stream.try_collect::<Vec<_>>().await?;
                 let users = client.lookup_users(ids).try_collect::<Vec<_>>().await?;
                 print_user_report(&users);
             }

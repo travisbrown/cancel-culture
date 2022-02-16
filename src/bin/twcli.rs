@@ -1,4 +1,5 @@
 use cancel_culture::{cli, twitter::Client};
+use chrono::Utc;
 use clap::Parser;
 use egg_mode::user::UserID;
 use futures::{StreamExt, TryStreamExt};
@@ -32,6 +33,42 @@ async fn main() -> Void {
                     println!("{},{}", id, tweet_id);
                 }
             }
+        }
+        SubCommand::UserJson { timestamp } => {
+            let stdin = std::io::stdin();
+            let handle = stdin.lock();
+            let ids = handle
+                .lines()
+                .map(|line| line.ok().and_then(|input| input.parse::<u64>().ok()))
+                .collect::<Option<HashSet<u64>>>()
+                .unwrap();
+
+            let users = client.lookup_users_json(ids);
+            let timestamp = timestamp.as_ref();
+
+            users
+                .try_for_each(|mut user| async move {
+                    if let Some(fields) = user.as_object_mut() {
+                        if let Some(timestamp_field_name) = timestamp {
+                            if let Some(previous_value) = fields.insert(
+                                timestamp_field_name.clone(),
+                                serde_json::json!(Utc::now().timestamp()),
+                            ) {
+                                log::warn!(
+                                    "Timestamp field collision: \"{}\" was {}",
+                                    timestamp_field_name,
+                                    previous_value
+                                );
+                            }
+                        }
+                    } else {
+                        log::warn!("Not a JSON object: {}", user);
+                    }
+
+                    println!("{}", user);
+                    Ok(())
+                })
+                .await?
         }
         SubCommand::UserInfo { db, md } => {
             let stdin = std::io::stdin();
@@ -210,5 +247,10 @@ enum SubCommand {
     TweetIdsByUserId {
         #[clap(long)]
         db: String,
+    },
+    UserJson {
+        /// Timestamp field name to add to Twitter JSON object
+        #[clap(short, long)]
+        timestamp: Option<String>,
     },
 }
