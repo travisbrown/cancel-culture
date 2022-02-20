@@ -24,10 +24,18 @@ async fn main() -> Result<()> {
         SubCommand::ListFollowers(ListFollowers {
             ids_only,
             screen_name,
+            user_token,
         }) => {
+            let token_type = if user_token {
+                egg_mode_extras::client::TokenType::User
+            } else {
+                egg_mode_extras::client::TokenType::App
+            };
+
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             let stream = screen_name
-                .map(|name| client.follower_ids(name))
-                .unwrap_or_else(|| client.follower_ids_self());
+                .map(|name| client.follower_ids(name, token_type))
+                .unwrap_or_else(|| client.self_follower_ids());
 
             if ids_only {
                 stream
@@ -38,7 +46,10 @@ async fn main() -> Result<()> {
                     .await?;
             } else {
                 let ids = stream.try_collect::<Vec<_>>().await?;
-                let users = client.lookup_users(ids).try_collect::<Vec<_>>().await?;
+                let users = client
+                    .lookup_users(ids, token_type)
+                    .try_collect::<Vec<_>>()
+                    .await?;
                 print_user_report(&users);
             }
             Ok(())
@@ -46,10 +57,18 @@ async fn main() -> Result<()> {
         SubCommand::ListFriends(ListFriends {
             ids_only,
             screen_name,
+            user_token,
         }) => {
+            let token_type = if user_token {
+                egg_mode_extras::client::TokenType::User
+            } else {
+                egg_mode_extras::client::TokenType::App
+            };
+
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             let stream = screen_name
-                .map(|name| client.followed_ids(name))
-                .unwrap_or_else(|| client.followed_ids_self());
+                .map(|name| client.followed_ids(name, token_type))
+                .unwrap_or_else(|| client.self_followed_ids());
 
             if ids_only {
                 stream
@@ -60,7 +79,10 @@ async fn main() -> Result<()> {
                     .await?;
             } else {
                 let ids = stream.try_collect::<Vec<_>>().await?;
-                let users = client.lookup_users(ids).try_collect::<Vec<_>>().await?;
+                let users = client
+                    .lookup_users(ids, token_type)
+                    .try_collect::<Vec<_>>()
+                    .await?;
                 print_user_report(&users);
             }
             Ok(())
@@ -625,6 +647,9 @@ struct ListFollowers {
     /// The user to list followers of (by default yourself)
     #[clap(short = 'u', long)]
     screen_name: Option<String>,
+    /// Use user token instead of app token (won't work for accounts that block you)
+    #[clap(long)]
+    user_token: bool,
 }
 
 /// Print a list of all users you (or someone else) follows
@@ -636,6 +661,9 @@ struct ListFriends {
     /// The user to list friends of (by default yourself)
     #[clap(short = 'u', long)]
     screen_name: Option<String>,
+    /// Use user token instead of app token (won't work for accounts that block you)
+    #[clap(long)]
+    user_token: bool,
 }
 
 /// Print a list of (up to approximately 3200) tweet IDs for a user

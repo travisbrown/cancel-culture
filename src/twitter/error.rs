@@ -30,6 +30,8 @@ pub enum Error {
     MissingUserError(u64),
     /// the provided token could not be used: {0:?}
     UnsupportedTokenMethod(super::Method),
+    /// egg-mode-extras error (temporary workaround during migration)
+    EggModeExtras(#[from] egg_mode_extras::error::Error),
 }
 
 impl fmt::Debug for Error {

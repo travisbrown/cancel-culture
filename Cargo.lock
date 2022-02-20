@@ -187,6 +187,7 @@ dependencies = [
  "data-encoding",
  "displaydoc",
  "egg-mode",
+ "egg-mode-extras",
  "fantoccini",
  "file_diff",
  "flate2",
@@ -567,6 +568,28 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "egg-mode-extras"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c78cbff56fd946984279af985a8c117535d90a35a3d014c93fe330a4d4b22f28"
+dependencies = [
+ "chrono",
+ "displaydoc",
+ "egg-mode",
+ "futures",
+ "lazy_static",
+ "log",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "toml",
 ]
 
 [[package]]
