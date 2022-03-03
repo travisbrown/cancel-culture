@@ -21,11 +21,11 @@ async fn main() -> Result<()> {
     let client = Client::from_config_file(&opts.key_file).await?;
 
     match opts.command {
-        SubCommand::ListFollowers(ListFollowers {
+        SubCommand::ListFollowers {
             ids_only,
             screen_name,
             user_token,
-        }) => {
+        } => {
             let token_type = if user_token {
                 egg_mode_extras::client::TokenType::User
             } else {
@@ -54,11 +54,11 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
-        SubCommand::ListFriends(ListFriends {
+        SubCommand::ListFriends {
             ids_only,
             screen_name,
             user_token,
-        }) => {
+        } => {
             let token_type = if user_token {
                 egg_mode_extras::client::TokenType::User
             } else {
@@ -87,7 +87,7 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
-        SubCommand::ListBlocks(ListBlocks { ids_only }) => {
+        SubCommand::ListBlocks { ids_only } => {
             let ids: Vec<u64> = client.blocks_ids().try_collect::<Vec<_>>().await?;
             if ids_only {
                 for id in ids {
@@ -157,12 +157,12 @@ async fn main() -> Result<()> {
 
             Ok(())
         }
-        SubCommand::ListTweets(ListTweets {
+        SubCommand::ListTweets {
             retweets,
             media,
             withheld,
             screen_name,
-        }) => client
+        } => client
             .tweets(screen_name, true, retweets)
             .try_for_each(|tweet| async move {
                 println!(
@@ -173,11 +173,11 @@ async fn main() -> Result<()> {
             })
             .await
             .map_err(Error::from),
-        SubCommand::LookupTweets(LookupTweets {
+        SubCommand::LookupTweets {
             retweets,
             media,
             withheld,
-        }) => {
+        } => {
             let stdin = std::io::stdin();
             let mut buffer = String::new();
             let mut handle = stdin.lock();
@@ -214,7 +214,7 @@ async fn main() -> Result<()> {
                 .await
                 .map_err(Error::from)
         }
-        SubCommand::LookupReply(LookupReply { query }) => {
+        SubCommand::LookupReply { query } => {
             let reply_id = Client::parse_tweet_id(&query)?;
             match client.get_in_reply_to(reply_id).await? {
                 Some((user, id)) => {
@@ -224,7 +224,7 @@ async fn main() -> Result<()> {
                 None => Err(Error::NotReplyError(reply_id)),
             }
         }
-        SubCommand::BlockedFollows(BlockedFollows { screen_name }) => {
+        SubCommand::BlockedFollows { screen_name } => {
             let blocks = client.blocks_ids().try_collect::<HashSet<u64>>().await?;
             let blocked_friends = client
                 .followed_ids(screen_name.clone())
@@ -250,7 +250,7 @@ async fn main() -> Result<()> {
 
             Ok(())
         }
-        SubCommand::FollowerReport(FollowerReport { screen_name }) => {
+        SubCommand::FollowerReport { screen_name } => {
             let blocks = client.blocks_ids().try_collect::<HashSet<u64>>().await?;
             let their_followers = client
                 .follower_ids(screen_name.clone())
@@ -352,13 +352,13 @@ async fn main() -> Result<()> {
 
             Ok(())
         }
-        SubCommand::DeletedTweets(DeletedTweets {
+        SubCommand::DeletedTweets {
             limit,
             report,
             ref store,
             ref cdx,
             ref screen_name,
-        }) => {
+        } => {
             let wayback_client = wayback::cdx::Client::new();
             let mut items = match cdx {
                 Some(cdx_path) => {
@@ -585,123 +585,90 @@ struct Opts {
 
 #[derive(Parser)]
 enum SubCommand {
-    BlockedFollows(BlockedFollows),
-    FollowerReport(FollowerReport),
-    LookupReply(LookupReply),
+    /// For a given user, list everyone they follow who you block
+    BlockedFollows { screen_name: String },
+    /// For a given user, print a report about their followers
+    FollowerReport { screen_name: String },
+    /// Get the URL of a tweet given the URL or status ID of a reply
+    LookupReply { query: String },
     /// Check whether a list of status IDs (from stdin) still exist
     CheckExistence,
-    DeletedTweets(DeletedTweets),
-    ListFollowers(ListFollowers),
-    ListFriends(ListFriends),
-    ListBlocks(ListBlocks),
-    ListTweets(ListTweets),
-    LookupTweets(LookupTweets),
+    /// List Wayback Machine URLs for all deleted tweets by a user
+    DeletedTweets {
+        #[clap(short = 'l', long)]
+        /// Only check the tweets the Wayback Machine most recently knows about
+        limit: Option<usize>,
+        /// Print a Markdown report with full text
+        #[clap(short = 'r', long)]
+        report: bool,
+        /// Local store directory for downloaded Wayback files
+        #[clap(short = 's', long)]
+        store: Option<String>,
+        /// Optional JSON file path for CDX results (useful for large accounts)
+        #[clap(short = 'c', long)]
+        cdx: Option<String>,
+        screen_name: String,
+    },
+    /// Print a list of all users who follow you (or someone else)
+    ListFollowers {
+        /// Print only the user's ID (by default you get the ID and screen name)
+        #[clap(short = 'i', long)]
+        ids_only: bool,
+        /// The user to list followers of (by default yourself)
+        #[clap(short = 'u', long)]
+        screen_name: Option<String>,
+        /// Use user token instead of app token (won't work for accounts that block you)
+        #[clap(long)]
+        user_token: bool,
+    },
+    /// Print a list of all users you (or someone else) follows
+    ListFriends {
+        /// Print only the user's ID (by default you get the ID and screen name)
+        #[clap(short = 'i', long)]
+        ids_only: bool,
+        /// The user to list friends of (by default yourself)
+        #[clap(short = 'u', long)]
+        screen_name: Option<String>,
+        /// Use user token instead of app token (won't work for accounts that block you)
+        #[clap(long)]
+        user_token: bool,
+    },
+    /// Print a list of all users you've blocked
+    ListBlocks {
+        /// Print only the user's ID (by default you get the ID and screen name)
+        #[clap(short = 'i', long)]
+        ids_only: bool,
+    },
+    /// Print a list of (up to approximately 3200) tweet IDs for a user
+    ListTweets {
+        /// Include retweet information
+        #[clap(short = 'r', long)]
+        retweets: bool,
+        /// Include media information
+        #[clap(short = 'm', long)]
+        media: bool,
+        /// Include withholding codes
+        #[clap(short = 'w', long)]
+        withheld: bool,
+        /// The user whose tweets you want to list
+        screen_name: String,
+    },
+    /// Read tweet IDs from stdin and print info
+    LookupTweets {
+        /// Include retweet information
+        #[clap(short = 'r', long)]
+        retweets: bool,
+        /// Include media information
+        #[clap(short = 'm', long)]
+        media: bool,
+        /// Include withholding codes
+        #[clap(short = 'w', long)]
+        withheld: bool,
+    },
     /// Block a list of user IDs (from stdin)
     ImportBlocks,
     /// List everyone you follow or who follows you who is not a mutual
     ListUnmutuals,
-}
-
-/// Get the URL of a tweet given the URL or status ID of a reply
-#[derive(Parser)]
-struct LookupReply {
-    query: String,
-}
-
-/// For a given user, list everyone they follow who you block
-#[derive(Parser)]
-struct BlockedFollows {
-    screen_name: String,
-}
-
-/// For a given user, print a report about their followers
-#[derive(Parser)]
-struct FollowerReport {
-    screen_name: String,
-}
-
-/// List Wayback Machine URLs for all deleted tweets by a user
-#[derive(Parser)]
-struct DeletedTweets {
-    #[clap(short = 'l', long)]
-    /// Only check the tweets the Wayback Machine most recently knows about
-    limit: Option<usize>,
-    /// Print a Markdown report with full text
-    #[clap(short = 'r', long)]
-    report: bool,
-    /// Local store directory for downloaded Wayback files
-    #[clap(short = 's', long)]
-    store: Option<String>,
-    /// Optional JSON file path for CDX results (useful for large accounts)
-    #[clap(short = 'c', long)]
-    cdx: Option<String>,
-    screen_name: String,
-}
-
-/// Print a list of all users who follow you (or someone else)
-#[derive(Parser)]
-struct ListFollowers {
-    /// Print only the user's ID (by default you get the ID and screen name)
-    #[clap(short = 'i', long)]
-    ids_only: bool,
-    /// The user to list followers of (by default yourself)
-    #[clap(short = 'u', long)]
-    screen_name: Option<String>,
-    /// Use user token instead of app token (won't work for accounts that block you)
-    #[clap(long)]
-    user_token: bool,
-}
-
-/// Print a list of all users you (or someone else) follows
-#[derive(Parser)]
-struct ListFriends {
-    /// Print only the user's ID (by default you get the ID and screen name)
-    #[clap(short = 'i', long)]
-    ids_only: bool,
-    /// The user to list friends of (by default yourself)
-    #[clap(short = 'u', long)]
-    screen_name: Option<String>,
-    /// Use user token instead of app token (won't work for accounts that block you)
-    #[clap(long)]
-    user_token: bool,
-}
-
-/// Print a list of (up to approximately 3200) tweet IDs for a user
-#[derive(Parser)]
-struct ListTweets {
-    /// Include retweet information
-    #[clap(short = 'r', long)]
-    retweets: bool,
-    /// Include media information
-    #[clap(short = 'm', long)]
-    media: bool,
-    /// Include withholding codes
-    #[clap(short = 'w', long)]
-    withheld: bool,
-    /// The user whose tweets you want to list
-    screen_name: String,
-}
-
-/// Read tweet IDs from stdin and print info
-#[derive(Parser)]
-struct LookupTweets {
-    /// Include retweet information
-    #[clap(short = 'r', long)]
-    retweets: bool,
-    /// Include media information
-    #[clap(short = 'm', long)]
-    media: bool,
-    /// Include withholding codes
-    #[clap(short = 'w', long)]
-    withheld: bool,
-}
-
-/// Print a list of all users you've blocked
-#[derive(Parser)]
-struct ListBlocks {
-    /// Print only the user's ID (by default you get the ID and screen name)
-    #[clap(short = 'i', long)]
-    ids_only: bool,
 }
 
 fn tweet_to_report(

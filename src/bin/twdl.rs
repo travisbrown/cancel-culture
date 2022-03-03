@@ -82,7 +82,7 @@ async fn add_user_follows(client: &Client, store: &Store, users: &[TwitterUser])
 }
 
 #[derive(Parser)]
-#[clap(name = "stores", version, author)]
+#[clap(name = "twdl", version, author)]
 struct Opts {
     /// TOML file containing Twitter API keys
     #[clap(short, long, default_value = "keys.toml")]
