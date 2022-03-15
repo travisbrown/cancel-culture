@@ -67,6 +67,14 @@ pub async fn shoot_tweet_bytes(
         tokio::time::sleep(duration).await;
     }
 
+    // There may be a cookies layer. If so we hide it.
+    client
+        .execute(
+            "document.getElementById('layers').children[0].style.display = 'none';",
+            vec![],
+        )
+        .await?;
+
     client.screenshot().await
 }
 
@@ -132,17 +140,18 @@ pub fn crop_tweet<I: GenericImageView<Pixel = Rgba<u8>>>(
             let mut upper_edge = None;
             let mut lower_edge = None;
 
-            // Start at the top at the newly-discovered left edge, move down until the first line.
+            // We no longer have a top border, so we find the top of the profile image and count up from there.
+            // This is a terrible hack and needs to be improved.
             while i < h {
-                if buffer.get_pixel(left, i) != RGBA_WHITE {
-                    upper_edge = Some(i + 2);
-                    i += 2;
+                if buffer.get_pixel(left + 81, i) != RGBA_WHITE {
+                    upper_edge = Some(i - 33);
+                    i = 0;
                     break;
                 }
                 i += 1;
             }
 
-            // And the next line, which represents the bottom of the tweet, including the actions.
+            // The first line represents the bottom of the tweet, including the actions.
             while i < h {
                 if buffer.get_pixel(left, i) != RGBA_WHITE {
                     lower_edge = Some(i - 1);
@@ -152,7 +161,9 @@ pub fn crop_tweet<I: GenericImageView<Pixel = Rgba<u8>>>(
             }
 
             upper_edge.zip(lower_edge).and_then(|(upper, lower)| {
-                i = lower;
+                // We move up two pixels because of a new double line.
+                // This should be fairly robust, since the target will always be higher anyway.
+                i = lower - 2;
 
                 let middle = left + (right - left) / 2;
                 let mut base = None;

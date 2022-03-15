@@ -4,6 +4,8 @@ use image::DynamicImage;
 use std::path::PathBuf;
 use std::time::Duration;
 
+const LOADING_DELAY: Duration = Duration::from_millis(1500);
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
@@ -41,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             status_id,
             opts.width,
             opts.height,
-            Some(Duration::from_millis(500)),
+            Some(LOADING_DELAY),
         )
         .await?;
 
