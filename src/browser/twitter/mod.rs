@@ -135,21 +135,50 @@ pub fn crop_tweet<I: GenericImageView<Pixel = Rgba<u8>>>(
         .zip(right_edge)
         .zip(gray)
         .and_then(|((left, right), gray)| {
-            i = 0;
-
             let mut upper_edge = None;
             let mut lower_edge = None;
+            let mut i = 0;
 
             // We no longer have a top border, so we find the top of the profile image and count up from there.
             // This is a terrible hack and needs to be improved.
+
+            // Find the top of the text above the profile image.
             while i < h {
-                if buffer.get_pixel(left + 81, i) != RGBA_WHITE {
-                    upper_edge = Some(i - 33);
-                    i = 0;
+                if (left..=right)
+                    .map(|j| buffer.get_pixel(j, i))
+                    .any(|p| p != RGBA_WHITE)
+                {
                     break;
                 }
                 i += 1;
             }
+
+            // Find the base of the text.
+            while i < h {
+                if !(left..=right)
+                    .map(|j| buffer.get_pixel(j, i))
+                    .any(|p| p != RGBA_WHITE)
+                {
+                    break;
+                }
+                i += 1;
+            }
+            let text_base = i;
+
+            // Find the top of the profile image.
+            while i < h {
+                if (left..=right)
+                    .map(|j| buffer.get_pixel(j, i))
+                    .any(|p| p != RGBA_WHITE)
+                {
+                    break;
+                }
+                i += 1;
+            }
+
+            upper_edge = Some(text_base + (i - text_base) / 2);
+
+            let mut i = 0;
 
             // The first line represents the bottom of the tweet, including the actions.
             while i < h {
