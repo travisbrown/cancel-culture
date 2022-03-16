@@ -100,6 +100,12 @@ pub async fn shoot_tweet(
 
 const RGBA_WHITE: Rgba<u8> = Rgba([255, 255, 255, 255]);
 
+// TODO: Figure out why this is necessary for finding the right edge in some cases.
+fn is_very_light_gray(pixel: &Rgba<u8>) -> bool {
+    let threshhold = 253;
+    pixel.0[0] >= threshhold && pixel.0[1] >= threshhold && pixel.0[2] >= threshhold
+}
+
 pub fn crop_tweet<I: GenericImageView<Pixel = Rgba<u8>>>(
     buffer: &I,
 ) -> Option<(u32, u32, u32, u32)> {
@@ -124,7 +130,9 @@ pub fn crop_tweet<I: GenericImageView<Pixel = Rgba<u8>>>(
 
     // Continue moving right to the second intersecting line.
     while i < w {
-        if buffer.get_pixel(i, 0) != RGBA_WHITE {
+        let pixel = buffer.get_pixel(i, 0);
+
+        if !is_very_light_gray(&pixel) {
             right_edge = Some(i - 1);
             break;
         }
@@ -199,7 +207,7 @@ pub fn crop_tweet<I: GenericImageView<Pixel = Rgba<u8>>>(
 
                 // Finally move up until you hit another gray line.
                 while i > 0 {
-                    if buffer.get_pixel(middle, i) == gray {
+                    if buffer.get_pixel(middle, i) != RGBA_WHITE {
                         base = Some(i - 2);
                         break;
                     }
@@ -227,11 +235,11 @@ mod tests {
         let examples = vec![
             (
                 "examples/images/703033780689199104-full.png",
-                Some((252, 108, 1195, 423)),
+                Some((253, 99, 1195, 494)),
             ),
             (
-                "examples/images/1302424011511529474-full.png",
-                Some((252, 108, 1195, 665)),
+                "examples/images/1503631923154984960-full.png",
+                Some((253, 99, 1195, 1184)),
             ),
         ];
 
