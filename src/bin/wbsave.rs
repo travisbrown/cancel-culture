@@ -1,4 +1,4 @@
-use cancel_culture::{cli, wayback};
+use cancel_culture::cli;
 use clap::Parser;
 use std::io::BufRead;
 
@@ -17,7 +17,7 @@ async fn main() -> Void {
     )
     .await;
 
-    let mut client = wayback::web::Client::new(fantoccini_client);
+    let mut client = wayback_rs::browser::Client::new(fantoccini_client);
     client.login(&opts.username, &opts.password).await?;
 
     let stdin = std::io::stdin();
@@ -29,7 +29,22 @@ async fn main() -> Void {
         let saved_url = client.save(&url).await?;
         tokio::time::sleep(std::time::Duration::from_millis(10000)).await;
 
-        println!("{}", saved_url);
+        match saved_url {
+            Some(saved_url) => {
+                // This is usually because Twitter redirects the Wayback Machine to e.g. a
+                // hashflags URL for some reason. It should be okay to retry after 30 minutes.
+                if !saved_url.contains(&url) {
+                    log::warn!("Save failed for {}", url);
+                    println!("0,{}", saved_url);
+                } else {
+                    println!("1,{}", saved_url);
+                }
+            }
+            None => {
+                log::warn!("Unknown error for {}", url);
+                println!("0,{}", url);
+            }
+        }
     }
 
     log::logger().flush();

@@ -1,16 +1,13 @@
-use cancel_culture::{cli, wbm, wbm::digest, wbm::valid};
+use cancel_culture::{cli, wbm, wbm::valid};
 use clap::Parser;
 use futures::StreamExt;
-use std::collections::HashSet;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::path::Path;
+use wayback_rs::digest;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
 
 #[tokio::main]
 async fn main() -> Void {
-    //valid::Result<()> {
     let opts: Opts = Opts::parse();
     let _ = cli::init_logging(opts.verbose)?;
 
@@ -134,40 +131,6 @@ async fn main() -> Void {
                 }
             }
         }
-        SubCommand::DownloadQuery {
-            valid,
-            other,
-            redirect_mapping,
-            invalid_mapping,
-            query,
-        } => {
-            let downloader =
-                wbm::Downloader::new(valid, other, redirect_mapping, invalid_mapping, "output")?;
-            let client = cancel_culture::wayback::cdx::Client::new();
-
-            let results = client.search(&query).await?;
-
-            downloader.save_all(&results).await?;
-        }
-        SubCommand::Validate { dir } => {
-            let store = wbm::store::Store::load(dir)?;
-
-            store.clean_valid().await?;
-            store.clean_other().await?;
-            let missing_contents = store.validate_contents().await?;
-            let missing_redirect_contents = store.validate_redirect_contents().await?;
-            store.validate_redirects().await?;
-            store.validate_invalids().await?;
-
-            for digest in missing_contents {
-                println!("{}", digest);
-            }
-            println!("--------");
-
-            for digest in missing_redirect_contents {
-                println!("{}", digest);
-            }
-        }
         SubCommand::SaveTweets { db, store } => {
             let tweet_store = wbm::tweet::db::TweetStore::new(db, false)?;
             let valid_store = valid::ValidStore::new(store);
@@ -193,36 +156,9 @@ async fn main() -> Void {
                     tweet.id.to_string(),
                     digest,
                     space_re
-                        .replace_all(&tweet.text.trim().replace("\n", "\\n"), " ")
+                        .replace_all(&tweet.text.trim().replace('\n', "\\n"), " ")
                         .to_string(),
                 ])?;
-            }
-        }
-        SubCommand::Retweets { dir, known } => {
-            let mut known_retweet_status_ids = HashSet::new();
-
-            if let Some(path) = known {
-                let file = File::open(path)?;
-                let reader = BufReader::new(file);
-                for result in reader.lines() {
-                    let line = result?;
-                    let fields = line.split(',').collect::<Vec<_>>();
-                    if let Some(id) = fields.get(2) {
-                        known_retweet_status_ids.insert(id.parse::<u64>()?);
-                    }
-                }
-            }
-            log::info!("Read {} known retweets", known_retweet_status_ids.len());
-
-            let store = wbm::store::Store::load(dir)?;
-            log::info!("Loaded store");
-
-            let result = store.extract_retweets(known_retweet_status_ids).await;
-            for ((retweeter, retweet_status_id), (tweeter, tweet_status_id)) in result {
-                println!(
-                    "{},{},{},{}",
-                    retweeter, tweeter, retweet_status_id, tweet_status_id
-                );
             }
         }
         SubCommand::Replies { db } => {
@@ -389,27 +325,6 @@ enum SubCommand {
         #[clap(short, long)]
         input: String,
     },
-    DownloadQuery {
-        /// The valid base directory
-        #[clap(short, long)]
-        valid: String,
-        /// The invalid base directory
-        #[clap(short, long)]
-        other: String,
-        /// The redirect mapping file
-        #[clap(short, long)]
-        redirect_mapping: String,
-        /// The redirect mapping file
-        #[clap(short, long)]
-        invalid_mapping: String,
-        /// The query
-        query: String,
-    },
-    Validate {
-        /// The base directory
-        #[clap(short, long)]
-        dir: String,
-    },
     SaveTweets {
         /// The database file
         #[clap(short, long)]
@@ -417,14 +332,6 @@ enum SubCommand {
         /// The base directory
         #[clap(short, long)]
         store: String,
-    },
-    Retweets {
-        /// The base directory
-        #[clap(short, long)]
-        dir: String,
-        /// Known retweets file
-        #[clap(short, long)]
-        known: Option<String>,
     },
     Get {
         /// The database file

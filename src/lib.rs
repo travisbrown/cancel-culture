@@ -6,5 +6,4 @@ pub mod cli;
 pub mod reports;
 pub mod twitter;
 pub mod util;
-pub mod wayback;
 pub mod wbm;

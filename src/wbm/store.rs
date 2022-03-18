@@ -1,13 +1,10 @@
-use super::Result;
-
 use crate::browser::twitter::parser::{self, BrowserTweet};
-use crate::twitter::store::wayback::TweetStore;
 use bytes::Bytes;
 use csv::{ReaderBuilder, WriterBuilder};
 use data_encoding::BASE32;
 use flate2::read::GzDecoder;
 use flate2::{Compression, GzBuilder};
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{Future, FutureExt, Stream, StreamExt, TryStreamExt};
 use futures_locks::{Mutex, RwLock};
 use itertools::Itertools;
 use sha1::{Digest, Sha1};
@@ -15,7 +12,30 @@ use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use wayback_rs::Item;
+
+use std::fmt::{Debug, Display, Formatter};
+use tokio::task::JoinError;
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    ClientError(#[from] reqwest::Error),
+    ItemError(#[from] wayback_rs::item::Error),
+    ItemParsingError(String),
+    ItemDecodingError(#[from] serde_json::Error),
+    FileIOError(#[from] std::io::Error),
+    StoreContentsDecodingError(#[from] csv::Error),
+    StoreContentsEncodingError(#[from] csv::IntoInnerError<csv::Writer<Vec<u8>>>),
+    TaskError(#[from] JoinError),
+    DataPathError(PathBuf),
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
 
 struct Contents {
     by_url: HashMap<String, Vec<Item>>,
@@ -85,7 +105,7 @@ impl Store {
             .unwrap_or_default()
     }
 
-    pub async fn add(&self, item: &Item, data: Bytes) -> Result<()> {
+    pub async fn add(&self, item: &Item, data: Bytes) -> Result<(), Error> {
         let mut contents = self.contents.write().await;
 
         if !contents.by_digest.contains_key(&item.digest) {
@@ -121,7 +141,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn compute_digest<R: Read>(input: &mut R) -> Result<String> {
+    pub fn compute_digest<R: Read>(input: &mut R) -> Result<String, Error> {
         let mut sha1 = Sha1::new();
 
         std::io::copy(input, &mut sha1)?;
@@ -133,11 +153,11 @@ impl Store {
         Ok(output)
     }
 
-    pub fn compute_digest_gz<R: Read>(input: &mut R) -> Result<String> {
+    pub fn compute_digest_gz<R: Read>(input: &mut R) -> Result<String, Error> {
         Store::compute_digest(&mut GzDecoder::new(input))
     }
 
-    pub fn compute_item_digest(&self, digest: &str) -> Result<Option<String>> {
+    pub fn compute_item_digest(&self, digest: &str) -> Result<Option<String>, Error> {
         let path = self.data_path(digest);
 
         if path.is_file() {
@@ -166,7 +186,7 @@ impl Store {
         }
     }
 
-    pub fn read(&self, digest: &str) -> Result<Option<String>> {
+    pub fn read(&self, digest: &str) -> Result<Option<String>, Error> {
         let path = self.data_path(digest);
 
         if path.is_file() {
@@ -186,11 +206,11 @@ impl Store {
             .and_then(|s| s.to_str().map(|s| s.to_owned()))
     }
 
-    pub fn load<P: AsRef<Path>>(base_dir: P) -> Result<Store> {
+    pub fn load<P: AsRef<Path>>(base_dir: P) -> Result<Store, Error> {
         let base_dir_path = base_dir.as_ref();
 
         if !base_dir_path.exists() {
-            return Err(super::Error::DataPathError(base_dir_path.to_path_buf()));
+            return Err(Error::DataPathError(base_dir_path.to_path_buf()));
         }
 
         let data_dir_path = base_dir_path.join(Store::DATA_DIR_NAME);
@@ -219,10 +239,10 @@ impl Store {
                             Some("0"),
                             row.get(4),
                         )
-                        .map_err(super::Error::from)
+                        .map_err(Error::from)
                     })
                 })
-                .collect::<Result<Vec<Item>>>()?
+                .collect::<Result<Vec<Item>, Error>>()?
         } else {
             vec![]
         };
@@ -259,7 +279,7 @@ impl Store {
         &self,
         f: F,
         limit: usize,
-    ) -> Result<Vec<(Item, bool)>> {
+    ) -> Result<Vec<(Item, bool)>, Error> {
         let contents = self.contents.read().await;
         let result = Mutex::new(vec![]);
         let selected = contents.filter(f);
@@ -380,7 +400,7 @@ impl Store {
         name: &str,
         out: W,
         f: F,
-    ) -> Result<()> {
+    ) -> Result<(), Error> {
         let contents = self.contents.read().await;
         let selected = contents.filter(f);
 
@@ -437,7 +457,7 @@ impl Store {
     fn extract_tweets_from_path<P: AsRef<Path>>(
         p: P,
         mime_type: &str,
-    ) -> Result<Vec<BrowserTweet>> {
+    ) -> Result<Vec<BrowserTweet>, Error> {
         let path = p.as_ref();
 
         if path.is_file() {
@@ -470,7 +490,7 @@ impl Store {
         &'a self,
         items: I,
         limit: usize,
-    ) -> impl Stream<Item = Result<(Item, Vec<BrowserTweet>)>> + 'a {
+    ) -> impl Stream<Item = Result<(Item, Vec<BrowserTweet>), Error>> + 'a {
         futures::stream::iter(items.into_iter().unique_by(|item| item.digest.clone()))
             .map(move |item| {
                 let path = self.data_path(&item.digest);
@@ -488,7 +508,7 @@ impl Store {
         &self,
         f: F,
         limit: usize,
-    ) -> Result<HashMap<u64, Vec<BrowserTweet>>> {
+    ) -> Result<HashMap<u64, Vec<BrowserTweet>>, Error> {
         let contents = self.contents.read().await;
         let selected = contents.filter(f).into_iter().cloned();
 
@@ -501,31 +521,6 @@ impl Store {
                 Ok(acc)
             })
             .await
-    }
-
-    pub async fn export_tweets(&self, tweet_store: &TweetStore) -> Result<()> {
-        let known_digests = tweet_store.get_known_digests().await?;
-        let items = self
-            .filter(move |item| !known_digests.contains(&item.digest))
-            .await;
-
-        self.extract_tweets_stream(items, 4)
-            .try_for_each(|(item, tweets)| {
-                let tweet_store = tweet_store.clone();
-                async move {
-                    if let Err(err) = tweet_store.add_tweets(&tweets, &item).await {
-                        log::error!(
-                            "Error saving tweet {:?}: {:?}",
-                            tweets.get(0).map(|t| t.id),
-                            err
-                        );
-                    }
-                    Ok(())
-                }
-            })
-            .await?;
-
-        Ok(())
     }
 
     fn add_item_by_url(map: &mut HashMap<String, Vec<Item>>, item: Item) {
@@ -559,7 +554,10 @@ impl Store {
     }
 
     /// Return a list of paths from the incoming directory that should be excluded
-    pub fn merge_data<P: AsRef<Path>>(base_dir: &P, incoming_dir: &P) -> Result<Vec<PathBuf>> {
+    pub fn merge_data<P: AsRef<Path>>(
+        base_dir: &P,
+        incoming_dir: &P,
+    ) -> Result<Vec<PathBuf>, Error> {
         let base_contents = Self::dir_contents_map(base_dir)?;
         let incoming_contents = Self::dir_contents_map(incoming_dir)?;
         let mut incoming_digests = incoming_contents.into_iter().collect::<Vec<_>>();
@@ -600,7 +598,7 @@ impl Store {
         Ok(result)
     }
 
-    fn dir_contents_map<P: AsRef<Path>>(path: P) -> Result<HashMap<String, (PathBuf, u64)>> {
+    fn dir_contents_map<P: AsRef<Path>>(path: P) -> Result<HashMap<String, (PathBuf, u64)>, Error> {
         std::fs::read_dir(path)?
             .map(|res| {
                 res.map_err(From::from).and_then(|entry| {
@@ -609,19 +607,50 @@ impl Store {
                     let digest = p
                         .file_stem()
                         .and_then(|oss| oss.to_str())
-                        .ok_or_else(|| super::Error::DataPathError(p.clone()))?;
+                        .ok_or_else(|| Error::DataPathError(p.clone()))?;
 
                     Ok((digest.to_string(), (p, size)))
                 })
             })
             .collect()
     }
+
+    pub fn save_all<'a>(
+        &'a self,
+        downloader: &'a wayback_rs::Downloader,
+        items: &'a [Item],
+        check_duplicate: bool,
+        limit: usize,
+    ) -> impl Future<Output = Result<(), Error>> + 'a {
+        futures::stream::iter(items)
+            .filter(move |item| self.contains(item).map(|v| !v))
+            .map(Ok)
+            .try_for_each_concurrent(limit, move |item| {
+                if !check_duplicate || !self.check_item_digest(&item.digest) {
+                    log::info!("Downloading {}", item.url);
+                    tryhard::retry_fn(move || downloader.download_item(item))
+                        .retries(7)
+                        .exponential_backoff(Duration::from_millis(250))
+                        .then(move |bytes_result| match bytes_result {
+                            Ok(bytes) => self.add(item, bytes).boxed_local(),
+                            Err(_) => async move {
+                                log::warn!("Unable to download {}", item.url);
+                                Ok(())
+                            }
+                            .boxed_local(),
+                        })
+                        .boxed_local()
+                } else {
+                    log::info!("Skipping {}", item.url);
+                    async { Ok(()) }.boxed_local()
+                }
+            })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Store;
-    use crate::twitter::store::wayback::TweetStore;
     use bytes::Bytes;
     use chrono::NaiveDate;
     use flate2::{write::GzEncoder, Compression};
@@ -827,28 +856,6 @@ mod tests {
                 .map(|tweets| tweets.iter().map(|tweet| tweet.user_id).collect()),
             Some(vec![258032124])
         );
-    }
-
-    #[tokio::test]
-    async fn test_store_export_tweets() {
-        let store = Store::load("examples/wayback/store/").unwrap();
-        let tempfile = NamedTempFile::new().unwrap();
-        let tweet_store = TweetStore::new(tempfile.path(), true).unwrap();
-
-        store.export_tweets(&tweet_store).await.unwrap();
-
-        let expected = vec![
-            "2G3EOT7X6IEQZXKSM3OJJDW6RBCHB7YE",
-            "3KQVYC56SMX4LL6QGQEZZGXMOVNZR2XX",
-            "5DECQVIU7Y3F276SIBAKKCRGDMVXJYFV",
-            "AJBB526CEZFOBT3FCQYLRMXQ2MSFHE3O",
-            "Y2A3M6COP2G6SKSM4BOHC2MHYS3UW22V",
-        ]
-        .into_iter()
-        .map(|digest| digest.to_string())
-        .collect();
-
-        assert_eq!(tweet_store.get_known_digests().await.unwrap(), expected);
     }
 
     #[tokio::test]
