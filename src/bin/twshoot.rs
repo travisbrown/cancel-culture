@@ -1,4 +1,4 @@
-use cancel_culture::{browser, twitter};
+use cancel_culture::browser;
 use clap::Parser;
 use image::DynamicImage;
 use std::path::PathBuf;
@@ -7,7 +7,7 @@ use std::time::Duration;
 const LOADING_DELAY: Duration = Duration::from_millis(1500);
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
 
     let mut client = browser::make_client_or_panic(
@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .status
         .parse::<u64>()
         .ok()
-        .or_else(|| twitter::extract_status_id(&opts.status))
+        .or_else(|| egg_mode_extras::util::extract_status_id(&opts.status))
     {
         let full_name = &format!("{}-full.png", status_id);
         let crop_name = &format!("{}.png", status_id);
@@ -47,21 +47,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
 
-        img.save(full_path)?;
+        img.save(full_path)
+            .map_err(browser::twitter::ScreenshotError::from)?;
 
         let as_rgba = img.into_rgba8();
 
         if let Some((x, y, w, h)) = browser::twitter::crop_tweet(&as_rgba) {
             let clipping = DynamicImage::ImageRgba8(as_rgba).crop(x, y, w, h);
-            clipping.save(crop_path)?;
+            clipping
+                .save(crop_path)
+                .map_err(browser::twitter::ScreenshotError::from)?;
         } else {
             eprintln!("Unable to crop tweet");
         }
 
         Ok(())
     } else {
-        Err(twitter::Error::TweetIDParseError(opts.status).into())
+        Err(Error::TweetIdParse(opts.status))
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Invalid tweet URL")]
+    TweetIdParse(String),
+    #[error("Screenshot error")]
+    Screenshot(#[from] browser::twitter::ScreenshotError),
 }
 
 #[derive(Parser)]

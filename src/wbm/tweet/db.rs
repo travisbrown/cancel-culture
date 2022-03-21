@@ -6,7 +6,6 @@ use rusqlite::{params, Connection, DropBehavior, OptionalExtension, Transaction}
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
-use thiserror::Error;
 
 const USER_SELECT: &str = "
     SELECT id
@@ -111,7 +110,7 @@ const GET_USER_TWEETS: &str = "
 
 pub type TweetStoreResult<T> = Result<T, TweetStoreError>;
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum TweetStoreError {
     #[error("Missing file for TweetStore")]
     FileMissing(#[from] std::io::Error),

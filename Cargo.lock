@@ -341,7 +341,6 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "pin-project",
- "quick-error",
  "regex",
  "reqwest",
  "rusqlite",
@@ -721,9 +720,9 @@ dependencies = [
 
 [[package]]
 name = "egg-mode-extras"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adca426c97e89c8e0adc3c3c82a4922bb40b78b9484dfe4545ef2ff486e4928a"
+checksum = "0cf029ecfdefa54dff94584af1b8509e3490fdc4b4f5a014aeb0d91b2c7e1fe7"
 dependencies = [
  "chrono",
  "displaydoc",
@@ -1906,12 +1905,6 @@ checksum = "c7342d5883fbccae1cc37a2353b09c87c9b0f3afd73f5fb9bba687a1f733b029"
 dependencies = [
  "unicode-xid",
 ]
-
-[[package]]
-name = "quick-error"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
 
 [[package]]
 name = "quote"

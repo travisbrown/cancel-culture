@@ -1,7 +1,7 @@
 use crate::browser::twitter::search::UserTweetSearch;
-use crate::twitter::Client;
 use chrono::{NaiveDate, Utc};
 use egg_mode::{tweet::Tweet, user::UserID};
+use egg_mode_extras::{client::TokenType, Client};
 use fantoccini::Client as FClient;
 use futures::TryStreamExt;
 use std::cmp::Reverse;
@@ -45,14 +45,14 @@ impl<'a> TweetLister<'a> {
         &mut self,
         id: T,
     ) -> anyhow::Result<(Vec<u64>, i32)> {
-        let user = self.client.lookup_user(id.clone()).await?;
+        let user = self.client.lookup_user(id.clone(), TokenType::App).await?;
         let screen_name = user.screen_name;
         let user_created = user.created_at.date().naive_utc();
         let tweet_count = user.statuses_count;
 
         let from_api = self
             .client
-            .tweets(id, true, true)
+            .user_tweets(id, true, true, TokenType::App)
             .try_collect::<Vec<Tweet>>()
             .await?;
 

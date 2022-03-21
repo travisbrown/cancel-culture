@@ -1,7 +1,8 @@
-use cancel_culture::{cli, twitter::Client};
+use cancel_culture::cli;
 use chrono::Utc;
 use clap::Parser;
 use egg_mode::user::UserID;
+use egg_mode_extras::{client::TokenType, Client};
 use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
 use std::collections::HashSet;
@@ -43,7 +44,7 @@ async fn main() -> Void {
                 .collect::<Option<HashSet<u64>>>()
                 .unwrap();
 
-            let users = client.lookup_users_json(ids);
+            let users = client.lookup_users_json(ids, TokenType::App);
             let timestamp = timestamp.as_ref();
 
             users
@@ -151,7 +152,7 @@ async fn main() -> Void {
                 .collect::<Option<Vec<u64>>>()
                 .unwrap();
             let mut missing = ids.iter().cloned().collect::<HashSet<_>>();
-            let results = client.lookup_users(ids);
+            let results = client.lookup_users(ids, TokenType::App);
 
             let valid = results
                 .filter_map(|res| async move {
@@ -201,12 +202,12 @@ async fn main() -> Void {
             missing2.reverse();
 
             futures::stream::select(
-                client.show_users(missing1),
-                client.show_users_user_token(missing2),
+                client.lookup_users_or_status(missing1, TokenType::App),
+                client.lookup_users_or_status(missing2, TokenType::User),
             )
             .try_for_each(|res| async move {
-                if let Err((UserID::ID(id), code)) = res {
-                    println!("{:?},{}", id, code);
+                if let Err((UserID::ID(id), status)) = res {
+                    println!("{:?},{}", id, status.code());
                 };
                 Ok(())
             })
