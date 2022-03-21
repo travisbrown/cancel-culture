@@ -111,7 +111,7 @@ async fn main() -> Void {
                         id,
                         names
                             .iter()
-                            .map(|name| name.replace("|", "\\|"))
+                            .map(|name| name.replace('|', "\\|"))
                             .collect::<Vec<_>>()
                             .join(", ")
                     );
@@ -131,7 +131,7 @@ async fn main() -> Void {
                         result
                             .names
                             .iter()
-                            .map(|name| name.replace(";", "\\;"))
+                            .map(|name| name.replace(';', "\\;"))
                             .collect::<Vec<_>>()
                             .join(";"),
                     ];

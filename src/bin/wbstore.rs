@@ -1,16 +1,16 @@
 use cancel_culture::{
     cli,
-    wayback::{cdx::Client, Item, Result, Store},
+    wbm::store::{Error, Store},
 };
 use clap::Parser;
 use flate2::{write::GzEncoder, Compression, GzBuilder};
 use futures::StreamExt;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::BufRead;
+use wayback_rs::Item;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
     let _ = cli::init_logging(opts.verbose).unwrap();
 
@@ -172,162 +172,6 @@ async fn main() -> Result<()> {
             let digest = Store::compute_digest(&mut bytes)?;
             println!("{}", digest);
         }
-        SubCommand::FixRedirects(FixCommand { base, known }) => {
-            let mut known_digests = HashSet::new();
-
-            if let Some(known_path) = known {
-                let file = std::io::BufReader::new(File::open(known_path)?);
-                for line in file.lines() {
-                    known_digests.insert(line?);
-                }
-            }
-
-            let client = Client::new_without_redirects();
-
-            let items = store.filter(|item| item.status == Some(302)).await;
-
-            for item in items {
-                if !item.url.to_lowercase().contains("cernovich")
-                    && !item.url.to_lowercase().contains("chiefscientist")
-                    && !known_digests.contains(&item.digest)
-                    && item.digest != "6Q4HKTYOVX4E7HQUF6TXAC4UUG2M227A"
-                    && item.digest != "ZBWFUJ2IKMYHPV6ER3CUG6F7GTDKSGVE"
-                {
-                    let existence_check = std::path::Path::new(&base)
-                        .join("good")
-                        .join(format!("{}.gz", item.digest));
-                    if !existence_check.exists() {
-                        match client.download_gz_to_dir(&base, &item).await {
-                            Ok(_) => {
-                                known_digests.insert(item.digest);
-                            }
-                            Err(err) => log::error!("Problem: {:?}", err),
-                        }
-                    }
-                }
-            }
-        }
-        SubCommand::GuessRedirects(FixCommand { base, known }) => {
-            let mut known_digests = HashSet::new();
-
-            if let Some(known_path) = known {
-                let file = std::io::BufReader::new(File::open(known_path)?);
-                for line in file.lines() {
-                    known_digests.insert(line?);
-                }
-            }
-
-            let items = store.filter(|item| item.status == Some(302)).await;
-            let canonical_re = regex::Regex::new(
-                r#"<link rel=.canonical. href=.https...twitter.com.([^/]+)/status/(\d+)"#,
-            )
-            .unwrap();
-            let permalink_re = regex::Regex::new(r"data-permalink-path=./([^/]+)").unwrap();
-            let fallback_re = regex::Regex::new(r#"<link rel=.canonical. href=.([^"]+)"#).unwrap();
-
-            for item in items {
-                if !item.url.to_lowercase().contains("cernovich")
-                    && !known_digests.contains(&item.digest)
-                {
-                    if let Ok(Some(content)) = store.read(&item.digest) {
-                        if let Some(canonical_match) = canonical_re.captures_iter(&content).next() {
-                            let canonical_screen_name = canonical_match.get(1).unwrap().as_str();
-                            let canonical_id = canonical_match.get(2).unwrap().as_str();
-
-                            let screen_name = permalink_re
-                                .captures_iter(&content)
-                                .filter_map(|m| {
-                                    let psn = m.get(1).unwrap().as_str().to_string();
-                                    if psn.to_lowercase() == canonical_screen_name.to_lowercase() {
-                                        Some(psn)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .next()
-                                .unwrap_or_else(|| canonical_screen_name.to_string());
-
-                            let new_content = format!(
-                                "<html><body>You are being <a href=\"https://twitter.com/{}/status/{}\">redirected</a>.</body></html>",
-                                screen_name,
-                                canonical_id
-                            );
-                            let mut ncb = new_content.as_bytes();
-
-                            let guess_digest = Store::compute_digest(&mut ncb)?;
-
-                            if guess_digest == item.digest {
-                                save_contents_gz(&item, &base, new_content.as_bytes())?;
-                            }
-                        } else if let Some(canonical_match) =
-                            fallback_re.captures_iter(&content).next()
-                        {
-                            let new_content = format!(
-                                "<html><body>You are being <a href=\"{}\">redirected</a>.</body></html>",
-                                canonical_match.get(1).unwrap().as_str()
-                            );
-                            let mut ncb = new_content.as_bytes();
-
-                            let guess_digest = Store::compute_digest(&mut ncb)?;
-
-                            if guess_digest == item.digest {
-                                save_contents_gz(&item, &base, new_content.as_bytes())?;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        SubCommand::Fix(FixCommand { base, .. }) => {
-            let throttled_error_digest = "VU34ZWVLIWSRGLOVRZXIJGZXTWX54UOW";
-            let error_503_digest = "N67J36CWSVSGPQLJCVMHS3EG7Q4S5VNW";
-            let error_504_01_digest = "B575DWBDMQ22WKVZHPROOX4ZLEF3IRNA";
-            let error_504_02_digest = "GJIF3BEPWGUMFCQBBTKJ36KZZE5DZLVJ";
-            let known_bad = vec![
-                throttled_error_digest,
-                error_503_digest,
-                error_504_01_digest,
-                error_504_02_digest,
-            ]
-            .iter()
-            .map(|digest| digest.to_string())
-            .collect::<HashSet<_>>();
-
-            let client = Client::new();
-
-            store
-                .compute_all_digests_stream(opts.parallelism)
-                .zip(futures::stream::iter(0..))
-                .for_each_concurrent(4, |(res, i)| {
-                    if i % 100 == 0 {
-                        log::info!("At item index {}", i);
-                    }
-                    async {
-                        match res {
-                            Ok((supposed, actual)) => {
-                                if supposed != actual && known_bad.contains(&actual) {
-                                    let items = store.items_by_digest(&supposed).await;
-
-                                    for item in items {
-                                        match client.download_gz_to_dir(&base, &item).await {
-                                            Ok(_) => (),
-                                            Err(err) => log::error!("Problem: {:?}", err),
-                                        }
-                                    }
-                                }
-                            }
-                            Err(digest) => {
-                                let items = store.items_by_digest(&digest).await;
-
-                                for item in items {
-                                    client.download_gz_to_dir(&base, &item).await.unwrap();
-                                }
-                            }
-                        }
-                    }
-                })
-                .await;
-        }
     }
 
     log::logger().flush();
@@ -359,9 +203,6 @@ enum SubCommand {
     ComputeDigestsRaw,
     Merge(MergeCommand),
     Check(CheckDigest),
-    Fix(FixCommand),
-    FixRedirects(FixCommand),
-    GuessRedirects(FixCommand),
     /// Compute digest for the input from stdin
     Digest,
     CheckValid(CheckValidCommand),
@@ -415,7 +256,7 @@ struct CheckValidCommand {
     dir: String,
 }
 
-async fn save_export_tgz(store: &Store, name: &str, query: &str) -> Result<()> {
+async fn save_export_tgz(store: &Store, name: &str, query: &str) -> Result<(), Error> {
     let file = File::create(format!("{}.tgz", name))?;
     let encoder = GzEncoder::new(file, Compression::default());
     store
@@ -427,13 +268,13 @@ async fn save_export_tgz(store: &Store, name: &str, query: &str) -> Result<()> {
     Ok(())
 }
 
-fn save_contents_gz(item: &Item, base: &str, content: &[u8]) -> Result<()> {
+fn save_contents_gz(item: &Item, base: &str, content: &[u8]) -> Result<(), Error> {
     use std::io::Write;
 
     log::info!("Saving {} to {:?} ({})", item.digest, base, item.url);
     let file = File::create(std::path::Path::new(base).join(format!("{}.gz", item.digest)))?;
     let mut gz = GzBuilder::new()
-        .filename(item.infer_filename())
+        .filename(item.make_filename())
         .write(file, Compression::default());
     gz.write_all(content)?;
     gz.finish()?;

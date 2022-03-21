@@ -19,7 +19,7 @@ pub enum Error {
     /// an error occurred in the http client: {0}
     HttpClientError(#[from] reqwest::Error),
     /// an error occurred when piloting the wayback machine subcrate: {0}
-    WaybackClientError(#[from] crate::wayback::Error),
+    WbmStoreError(#[from] crate::wbm::store::Error),
     /// failure to read from CDX JSON file: {0}
     CdxJsonError(#[source] std::io::Error),
     /// a failure occurred when parsing a tweet id string: {0}
@@ -30,6 +30,10 @@ pub enum Error {
     MissingUserError(u64),
     /// the provided token could not be used: {0:?}
     UnsupportedTokenMethod(super::Method),
+    /// CDX request error
+    Cdx(#[from] wayback_rs::cdx::Error),
+    /// Wayback Machine download client error
+    WaybackDownloader(#[from] wayback_rs::downloader::Error),
     /// egg-mode-extras error (temporary workaround during migration)
     EggModeExtras(#[from] egg_mode_extras::error::Error),
 }

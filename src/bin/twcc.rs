@@ -2,7 +2,7 @@ use cancel_culture::{
     cli,
     reports::deleted_tweets::DeletedTweetReport,
     twitter::{extract_status_id, Client, Error, Result},
-    wayback,
+    wbm,
 };
 use clap::Parser;
 use egg_mode::{tweet::Tweet, user::TwitterUser};
@@ -12,6 +12,8 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
+
+const CDX_PAGE_LIMIT: usize = 150000;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -359,15 +361,19 @@ async fn main() -> Result<()> {
             ref cdx,
             ref screen_name,
         } => {
-            let wayback_client = wayback::cdx::Client::new();
+            let index_client = wayback_rs::cdx::IndexClient::default();
+            let downloader = wayback_rs::Downloader::new()?;
             let mut items = match cdx {
                 Some(cdx_path) => {
                     let cdx_file = File::open(cdx_path).map_err(Error::CdxJsonError)?;
-                    wayback::cdx::Client::load_json(cdx_file)?
+                    wayback_rs::cdx::IndexClient::load_json(cdx_file)?
                 }
                 None => {
                     let url = format!("twitter.com/{}/status/*", screen_name);
-                    wayback_client.search(&url).await?
+                    index_client
+                        .stream_search(&url, CDX_PAGE_LIMIT)
+                        .try_collect::<Vec<_>>()
+                        .await?
                 }
             };
 
@@ -376,7 +382,7 @@ async fn main() -> Result<()> {
             let results = items.into_iter().group_by(|item| item.url.clone());
 
             let store = match store {
-                Some(dir) => Some(wayback::Store::load(dir)?),
+                Some(dir) => Some(wbm::store::Store::load(dir)?),
                 None => None,
             };
 
@@ -389,8 +395,8 @@ async fn main() -> Result<()> {
                             .into_iter()
                             .filter(|item| item.status.is_none() || item.status == Some(200))
                             .collect::<Vec<_>>();
-                        let last = valid.iter().map(|item| item.archived).max();
-                        let first = valid.into_iter().min_by_key(|item| item.archived);
+                        let last = valid.iter().map(|item| item.archived_at).max();
+                        let first = valid.into_iter().min_by_key(|item| item.archived_at);
 
                         first.zip(last).map(|(f, l)| (id, l, f))
                     })
@@ -402,12 +408,12 @@ async fn main() -> Result<()> {
 
             let selected = candidates.into_iter().take(limit.unwrap_or(usize::MAX));
 
-            let mut by_id: HashMap<u64, wayback::Item> = HashMap::new();
+            let mut by_id: HashMap<u64, wayback_rs::Item> = HashMap::new();
 
             for (id, _, current) in selected {
                 match by_id.get(&id) {
                     Some(latest) => {
-                        if latest.archived < current.archived {
+                        if latest.archived_at < current.archived_at {
                             by_id.insert(id, current);
                         }
                     }
@@ -428,7 +434,7 @@ async fn main() -> Result<()> {
 
             use cancel_culture::browser::twitter::parser::BrowserTweet;
 
-            let mut report_items = HashMap::<u64, (BrowserTweet, wayback::Item)>::new();
+            let mut report_items = HashMap::<u64, (BrowserTweet, wayback_rs::Item)>::new();
 
             if let Some(s) = store.as_ref() {
                 let mut items = Vec::with_capacity(by_id.len());
@@ -441,7 +447,7 @@ async fn main() -> Result<()> {
                 }
 
                 log::info!("Saving {} items to store", items.len());
-                wayback_client.save_all(s, &items, true, 4).await?;
+                s.save_all(&downloader, &items, true, 4).await?;
             }
 
             for (id, _) in deleted {
@@ -454,7 +460,7 @@ async fn main() -> Result<()> {
                             Some(v) => v,
                             None => {
                                 log::info!("Downloading {}", item.url);
-                                let bytes = wayback_client.download(item, true).await?;
+                                let bytes = downloader.download_item(item).await?;
                                 match String::from_utf8_lossy(&bytes) {
                                     Cow::Borrowed(value) => value.to_string(),
                                     Cow::Owned(value_with_replacements) => {
@@ -567,7 +573,7 @@ fn print_user_report(users: &[TwitterUser]) {
 }
 
 fn escape_tweet_text(text: &str) -> String {
-    text.replace(r"\'", "'").replace("\n", " ")
+    text.replace(r"\'", "'").replace('\n', " ")
 }
 
 #[derive(Parser)]

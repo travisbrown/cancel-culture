@@ -5,6 +5,7 @@ use csv::ReaderBuilder;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
+use wayback_rs::Item;
 
 type Void = Result<(), Box<dyn std::error::Error>>;
 
@@ -44,11 +45,16 @@ async fn main() -> Void {
                     if row.len() > 2 && hashes.contains(&row[2]) {
                         Some((
                             row[2].to_string(),
-                            wbm::Item::parse_optional(
+                            Item::parse_optional_record(
                                 row.get(0),
                                 row.get(1),
                                 row.get(2),
                                 row.get(3),
+                                if row.len() == 5 {
+                                    Some("0")
+                                } else {
+                                    row.get(4)
+                                },
                                 if row.len() == 5 {
                                     row.get(4)
                                 } else {
@@ -61,7 +67,7 @@ async fn main() -> Void {
                         None
                     }
                 })
-                .collect::<HashMap<String, wbm::Item>>();
+                .collect::<HashMap<String, Item>>();
 
             log::info!("{} items found", by_digest.len());
 
@@ -95,7 +101,7 @@ async fn main() -> Void {
                     }
                 }
 
-                items.sort_by_key(|(_, item)| item.archived);
+                items.sort_by_key(|(_, item)| item.archived_at);
                 items.reverse();
 
                 println!(
@@ -109,7 +115,7 @@ async fn main() -> Void {
                     println!(
                         "* Archived as @{} on [{}]({})",
                         tweet.user_screen_name,
-                        item.archived.format("%e %B %Y"),
+                        item.archived_at.format("%e %B %Y"),
                         item.wayback_url(false)
                     );
                 }

@@ -3,7 +3,6 @@ mod error;
 mod method;
 mod method_limit;
 mod rate_limited;
-pub mod store;
 pub mod timeline;
 mod tweet_lister;
 
