@@ -1,11 +1,7 @@
-use cancel_culture::{
-    cli,
-    reports::deleted_tweets::DeletedTweetReport,
-    twitter::{extract_status_id, Client, Error, Result},
-    wbm,
-};
+use cancel_culture::{cli, reports::deleted_tweets::DeletedTweetReport, wbm};
 use clap::Parser;
 use egg_mode::{tweet::Tweet, user::TwitterUser};
+use egg_mode_extras::{client::TokenType, util::extract_status_id};
 use futures::TryStreamExt;
 use itertools::Itertools;
 use std::borrow::Cow;
@@ -15,12 +11,36 @@ use std::io::Read;
 
 const CDX_PAGE_LIMIT: usize = 150000;
 
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Twitter API client error")]
+    EggMode(#[from] egg_mode::error::Error),
+    #[error("Twitter API client extensions error")]
+    EggModeExtras(#[from] egg_mode_extras::error::Error),
+    #[error("Failure to read from standard input")]
+    Stdin(#[source] std::io::Error),
+    #[error("The tweet ID {0}, which was supposed to be a reply, was not a reply")]
+    NotReply(u64),
+    #[error("Failure to read from CDX JSON file: {0}")]
+    CdxJson(#[source] std::io::Error),
+    #[error("Failure occurred when parsing a tweet id string: {0}")]
+    TweetIdParse(String),
+    #[error("Error occurred in the http client: {0}")]
+    HttpClient(#[from] reqwest::Error),
+    #[error("Wayback Machine CDX client error")]
+    WaybackCdx(#[from] wayback_rs::cdx::Error),
+    #[error("Wayback Machine download client error")]
+    WaybackDownloader(#[from] wayback_rs::downloader::Error),
+    #[error("Wayback Machine store error")]
+    WbmStoreError(#[from] wbm::store::Error),
+}
+
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
     let _ = cli::init_logging(opts.verbose).unwrap();
 
-    let client = Client::from_config_file(&opts.key_file).await?;
+    let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
 
     match opts.command {
         SubCommand::ListFollowers {
@@ -90,24 +110,27 @@ async fn main() -> Result<()> {
             Ok(())
         }
         SubCommand::ListBlocks { ids_only } => {
-            let ids: Vec<u64> = client.blocks_ids().try_collect::<Vec<_>>().await?;
+            let ids: Vec<u64> = client.blocked_ids().try_collect::<Vec<_>>().await?;
             if ids_only {
                 for id in ids {
                     println!("{}", id);
                 }
             } else {
-                let users = client.lookup_users(ids).try_collect::<Vec<_>>().await?;
+                let users = client
+                    .lookup_users(ids, TokenType::App)
+                    .try_collect::<Vec<_>>()
+                    .await?;
                 print_user_report(&users);
             }
             Ok(())
         }
         SubCommand::ListUnmutuals => {
             let follower_ids: HashSet<u64> = client
-                .follower_ids_self()
+                .self_follower_ids()
                 .try_collect::<HashSet<_>>()
                 .await?;
             let followed_ids: HashSet<u64> = client
-                .followed_ids_self()
+                .self_followed_ids()
                 .try_collect::<HashSet<_>>()
                 .await?;
 
@@ -117,7 +140,10 @@ async fn main() -> Result<()> {
                 .collect::<Vec<_>>();
             log::info!("Looking up {} users", ids.len());
 
-            let mut users = client.lookup_users(ids).try_collect::<Vec<_>>().await?;
+            let mut users = client
+                .lookup_users(ids, TokenType::App)
+                .try_collect::<Vec<_>>()
+                .await?;
             users.sort_by_key(|user| -user.followers_count);
 
             for user in users {
@@ -134,9 +160,7 @@ async fn main() -> Result<()> {
             let stdin = std::io::stdin();
             let mut buffer = String::new();
             let mut handle = stdin.lock();
-            handle
-                .read_to_string(&mut buffer)
-                .map_err(Error::StdinError)?;
+            handle.read_to_string(&mut buffer).map_err(Error::Stdin)?;
 
             let ids = buffer
                 .split_whitespace()
@@ -165,7 +189,7 @@ async fn main() -> Result<()> {
             withheld,
             screen_name,
         } => client
-            .tweets(screen_name, true, retweets)
+            .user_tweets(screen_name, true, retweets, TokenType::App)
             .try_for_each(|tweet| async move {
                 println!(
                     "{}",
@@ -183,9 +207,7 @@ async fn main() -> Result<()> {
             let stdin = std::io::stdin();
             let mut buffer = String::new();
             let mut handle = stdin.lock();
-            handle
-                .read_to_string(&mut buffer)
-                .map_err(Error::StdinError)?;
+            handle.read_to_string(&mut buffer).map_err(Error::Stdin)?;
 
             let ids = buffer
                 .split_whitespace()
@@ -197,7 +219,7 @@ async fn main() -> Result<()> {
                 .count();
 
             client
-                .lookup_tweets(ids)
+                .lookup_tweets(ids, TokenType::App)
                 .try_for_each(|(id, result)| async move {
                     match result {
                         Some(tweet) => {
@@ -217,19 +239,19 @@ async fn main() -> Result<()> {
                 .map_err(Error::from)
         }
         SubCommand::LookupReply { query } => {
-            let reply_id = Client::parse_tweet_id(&query)?;
-            match client.get_in_reply_to(reply_id).await? {
+            let reply_id = extract_status_id(&query).ok_or_else(|| Error::TweetIdParse(query))?;
+            match client.lookup_reply_parent(reply_id, TokenType::App).await? {
                 Some((user, id)) => {
                     println!("https://twitter.com/{}/status/{}", user, id);
                     Ok(())
                 }
-                None => Err(Error::NotReplyError(reply_id)),
+                None => Err(Error::NotReply(reply_id)),
             }
         }
         SubCommand::BlockedFollows { screen_name } => {
-            let blocks = client.blocks_ids().try_collect::<HashSet<u64>>().await?;
+            let blocks = client.blocked_ids().try_collect::<HashSet<u64>>().await?;
             let blocked_friends = client
-                .followed_ids(screen_name.clone())
+                .followed_ids(screen_name.clone(), TokenType::App)
                 .try_collect::<Vec<_>>()
                 .await?
                 .into_iter()
@@ -240,7 +262,7 @@ async fn main() -> Result<()> {
                 eprintln!("{} does not follow anyone you've blocked", screen_name);
             } else {
                 let mut blocked_follows = client
-                    .lookup_users(blocked_friends)
+                    .lookup_users(blocked_friends, TokenType::App)
                     .try_collect::<Vec<_>>()
                     .await?;
                 blocked_follows.sort_by_key(|u| -u.followers_count);
@@ -253,19 +275,19 @@ async fn main() -> Result<()> {
             Ok(())
         }
         SubCommand::FollowerReport { screen_name } => {
-            let blocks = client.blocks_ids().try_collect::<HashSet<u64>>().await?;
+            let blocks = client.blocked_ids().try_collect::<HashSet<u64>>().await?;
             let their_followers = client
-                .follower_ids(screen_name.clone())
+                .follower_ids(screen_name.clone(), TokenType::App)
                 .try_collect::<HashSet<u64>>()
                 .await?;
 
             let your_followers = client
-                .follower_ids_self()
+                .self_follower_ids()
                 .try_collect::<HashSet<u64>>()
                 .await?;
 
             let your_followeds = client
-                .followed_ids_self()
+                .self_followed_ids()
                 .try_collect::<HashSet<u64>>()
                 .await?;
 
@@ -289,7 +311,10 @@ async fn main() -> Result<()> {
                 .union(&followed_followers)
                 .cloned()
                 .collect::<HashSet<u64>>();
-            let mut common_users = client.lookup_users(common).try_collect::<Vec<_>>().await?;
+            let mut common_users = client
+                .lookup_users(common, TokenType::App)
+                .try_collect::<Vec<_>>()
+                .await?;
 
             common_users.sort_by_key(|user| user.id);
 
@@ -336,18 +361,16 @@ async fn main() -> Result<()> {
             let stdin = std::io::stdin();
             let mut buffer = String::new();
             let mut handle = stdin.lock();
-            handle
-                .read_to_string(&mut buffer)
-                .map_err(Error::StdinError)?;
+            handle.read_to_string(&mut buffer).map_err(Error::Stdin)?;
 
             let ids = buffer
                 .split_whitespace()
                 .flat_map(|input| input.parse::<u64>().ok());
 
             client
-                .statuses_exist_stream(ids)
-                .try_for_each(|(id, exists)| async move {
-                    println!("{},{}", id, if exists { "1" } else { "0" });
+                .lookup_tweets(ids, TokenType::App)
+                .try_for_each(|(id, tweet)| async move {
+                    println!("{},{}", id, if tweet.is_some() { "1" } else { "0" });
                     Ok(())
                 })
                 .await?;
@@ -365,7 +388,7 @@ async fn main() -> Result<()> {
             let downloader = wayback_rs::Downloader::new()?;
             let mut items = match cdx {
                 Some(cdx_path) => {
-                    let cdx_file = File::open(cdx_path).map_err(Error::CdxJsonError)?;
+                    let cdx_file = File::open(cdx_path).map_err(Error::CdxJson)?;
                     wayback_rs::cdx::IndexClient::load_json(cdx_file)?
                 }
                 None => {
@@ -423,11 +446,14 @@ async fn main() -> Result<()> {
                 }
             }
 
-            let deleted_status = client.statuses_exist(by_id.iter().map(|(k, _)| *k)).await?;
+            let deleted_status = client
+                .lookup_tweets(by_id.iter().map(|(k, _)| *k), TokenType::App)
+                .try_collect::<Vec<_>>()
+                .await?;
 
             let mut deleted = deleted_status
                 .into_iter()
-                .filter(|(_, v)| !v)
+                .filter(|(_, v)| v.is_none())
                 .collect::<Vec<_>>();
 
             deleted.sort_by_key(|(k, _)| *k);
@@ -524,10 +550,12 @@ async fn main() -> Result<()> {
                 report_items_vec.sort_unstable_by_key(|(k, _)| -(**k as i64));
 
                 let deleted_status = client
-                    .statuses_exist(report_items_vec.iter().map(|(k, _)| **k))
+                    .lookup_tweets(report_items_vec.iter().map(|(k, _)| **k), TokenType::App)
+                    .map_ok(|(k, v)| (k, v.is_some()))
+                    .try_collect::<HashMap<_, _>>()
                     .await?;
 
-                let deleted_count = deleted_status.iter().filter(|(_, v)| !(*v)).count();
+                let deleted_count = deleted_status.iter().filter(|(_, v)| !*v).count();
                 let undeleted_count = report_items_vec.len() - deleted_count;
 
                 let report = DeletedTweetReport::new(screen_name, deleted_count, undeleted_count);

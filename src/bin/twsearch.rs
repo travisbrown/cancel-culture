@@ -14,8 +14,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await;
 
-    let client = cancel_culture::twitter::Client::from_config_file(&opts.key_file).await?;
-    let mut lister = cancel_culture::twitter::TweetLister::new(&client, &mut browser);
+    let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
+    let mut lister = cancel_culture::browser::twitter::TweetLister::new(&client, &mut browser);
 
     let (mut ids, expected) = lister.get_all(opts.screen_name).await?;
 

@@ -1,5 +1,7 @@
 pub mod parser;
 pub mod search;
+mod tweet_lister;
+pub use tweet_lister::TweetLister;
 
 use fantoccini::error::CmdError;
 use fantoccini::{Client, Locator};
@@ -78,12 +80,12 @@ pub async fn shoot_tweet_bytes(
     client.screenshot().await
 }
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum ScreenshotError {
-        DownloadError(err: fantoccini::error::CmdError) { from() }
-        ImageDecodingError(err: image::error::ImageError) { from() }
-    }
+#[derive(thiserror::Error, Debug)]
+pub enum ScreenshotError {
+    #[error("Download error")]
+    Download(#[from] fantoccini::error::CmdError),
+    #[error("Image decoding error")]
+    ImageDecoding(#[from] image::error::ImageError),
 }
 
 pub async fn shoot_tweet(

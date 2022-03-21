@@ -6,9 +6,8 @@ use std::fs::{read_dir, DirEntry, File};
 use std::io::{self, Read};
 use std::iter::once;
 use std::path::{Path, PathBuf};
-use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Unexpected item: {path:?}")]
     Unexpected { path: Box<Path> },

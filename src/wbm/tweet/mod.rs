@@ -6,9 +6,8 @@ use flate2::read::GzDecoder;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("I/O error")]
     IOError(#[from] std::io::Error),
