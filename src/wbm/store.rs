@@ -628,9 +628,8 @@ impl Store {
             .try_for_each_concurrent(limit, move |item| {
                 if !check_duplicate || !self.check_item_digest(&item.digest) {
                     log::info!("Downloading {}", item.url);
-                    tryhard::retry_fn(move || downloader.download_item(item))
-                        .retries(7)
-                        .exponential_backoff(Duration::from_millis(250))
+                    downloader
+                        .download_item(item)
                         .then(move |bytes_result| match bytes_result {
                             Ok(bytes) => self.add(item, bytes).boxed_local(),
                             Err(_) => async move {
