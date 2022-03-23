@@ -2938,9 +2938,9 @@ checksum = "3d958d035c4438e28c70e4321a2911302f10135ce78a9c7834c0cab4123d06a2"
 
 [[package]]
 name = "wayback-rs"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b56bb762460a1abac9f7cfe5de98e5a6742c03b9b2032cb766a1dcf5bfa7f1f"
+checksum = "5c50cc0e2fd6e3c4dfb21c7cbc15d13cd0619c22a3c8466dfbb63a40506f4782"
 dependencies = [
  "async-std",
  "bytes 1.1.0",
