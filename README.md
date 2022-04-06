@@ -173,7 +173,6 @@ Most of these things are excluded for one of the following reasons:
 
 * They're even more fragile than the stuff that's here now.
 * I haven't ported them from Scala to Rust yet.
-* They probably technically violate some ToS somewhere.
 
 I might add some of them eventually.
 
