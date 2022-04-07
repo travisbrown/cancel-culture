@@ -22,6 +22,19 @@ or [this recent project](https://github.com/salcoast/deleted-tweets-archive) by
 
 > Still, he somehow has access to everything you’ve ever posted & deleted, and can seemingly immediately find your new alt/resurrect/punished accounts.
 
+## Terms of service compliance
+
+This software is designed to promote use that is compliant with the Twitter API
+[Developer Agreement](https://developer.twitter.com/en/developer-terms/agreement-and-policy)
+and the [Internet Archive](https://archive.org/)'s [Terms of Use](https://archive.org/about/terms.php).
+
+Text and metadata for Twitter statuses are retrieved from the [Wayback Machine][wayback-machine], not the Twitter API,
+which is primarily used here to list follower relationships and to allow users to import and export block lists.
+
+In theory it's possible that there are ways you could violate the Developer Agreement with the help of this software (for example
+by using "information obtained from the Twitter API to target people with advertising outside of the Twitter platform").
+Don't do that.
+
 ## Examples
 
 One of the things this project provides is a command-line tool that takes a Twitter screen
@@ -52,7 +65,7 @@ actually useful.
 I sometimes work in a [certain programming language community](https://www.scala-lang.org) where
 prominent community members have a tendency to say abusive
 or exclusionary things and then delete and deny everything when they're confronted, so the CLI also
-provides a way to search the [Wayback Machine](https://web.archive.org/) for deleted tweets by a
+provides a way to search the [Wayback Machine][wayback-machine] for deleted tweets by a
 specified user:
 
 ```
@@ -183,3 +196,5 @@ have to wait. I might try to smooth out some of these rough edges at some point,
 ## License
 
 This project is licensed under the Mozilla Public License, version 2.0. See the LICENSE file for details.
+
+[wayback-machine]: https://web.archive.org/
