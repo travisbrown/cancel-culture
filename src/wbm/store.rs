@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 use wayback_rs::Item;
 
 use std::fmt::{Debug, Display, Formatter};
@@ -655,7 +654,6 @@ mod tests {
     use flate2::{write::GzEncoder, Compression};
     use std::fs::File;
     use std::path::PathBuf;
-    use tempfile::NamedTempFile;
     use wayback_rs::Item;
 
     fn example_item() -> Item {

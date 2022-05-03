@@ -108,7 +108,7 @@ impl Scroller for UserTweetSearch {
 
             let mut ids = Vec::with_capacity(elements.len());
 
-            for mut element in elements {
+            for element in elements {
                 if let Ok(Some(url)) = element.attr("href").await {
                     if let Some(caps) = self.pattern.captures(&url) {
                         if let Ok(id) = caps[1].parse::<u64>() {
