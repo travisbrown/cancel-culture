@@ -18,7 +18,7 @@ pub trait Scroller {
 
     fn advance(client: &mut Client) -> BoxFuture<Result<(), Self::Err>> {
         async move {
-            let mut element = client.active_element().await?;
+            let element = client.active_element().await?;
             element.send_keys(" ").err_into().await
         }
         .boxed()

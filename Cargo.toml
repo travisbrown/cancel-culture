@@ -17,14 +17,14 @@ data-encoding = "2.3"
 displaydoc = "0.2"
 egg-mode = "0.16"
 egg-mode-extras = "0.2.2"
-fantoccini = { version = "0.18", features = [ "rustls-tls" ] }
+fantoccini = { version = "0.19", features = [ "rustls-tls" ] }
 file_diff = "1.0"
 flate2 = "1.0"
 fs_extra = "1.2"
 futures = "0.3"
 futures-locks = "0.7"
 futures-util = "0.3"
-html5ever = "0.25"
+html5ever = "0.26"
 hyper = { version = "0.14", features = [ "stream" ] }
 hyper-tls = "0.5"
 image = "0.24"
@@ -36,12 +36,12 @@ pin-project = "1.0"
 regex = "1.4"
 reqwest = { version = "0.11", features = ["gzip", "json"] }
 rusqlite = "0.27"
-scraper = "0.12"
+scraper = "0.13"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 sha-1 = "0.10"
-simplelog = "0.11"
+simplelog = "0.12"
 tar = "0.4"
 tempfile = "3.2"
 thiserror = "1.0"
@@ -52,7 +52,7 @@ tokio-test = "0.4"
 toml = "0.5"
 tryhard = "0.4"
 url = "2.2"
-wayback-rs = "0.3.0"
+wayback-rs = "0.4.0"
 
 [features]
 bundled-sqlite3 = ["libsqlite3-sys/bundled"]

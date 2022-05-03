@@ -7,7 +7,7 @@ use tokio::time::sleep;
 /// Super-low-tech way to download your block list without a Twitter API account.
 #[tokio::main]
 async fn main() -> Result<(), fantoccini::error::CmdError> {
-    let mut client = browser::make_client_or_panic("firefox", false, None, None).await;
+    let client = browser::make_client_or_panic("firefox", false, None, None).await;
 
     client.goto(BLOCK_LIST_URL).await?;
 
@@ -40,8 +40,8 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
         let account_items = account_list.find_all(ACCOUNT_ITEM_LOC).await?;
         let mut added = 0;
 
-        for mut item in account_items {
-            let mut link = item.find(ACCOUNT_LINK_LOC).await?;
+        for item in account_items {
+            let link = item.find(ACCOUNT_LINK_LOC).await?;
             if let Some(name) = link
                 .attr("href")
                 .await?
