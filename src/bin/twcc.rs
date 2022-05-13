@@ -571,21 +571,23 @@ async fn main() -> Result<(), Error> {
 
                     if *deleted_status.get(id).unwrap_or(&false) {
                         println!(
-                            "* [{}](https://web.archive.org/web/{}/{}) ([live](https://twitter.com/{}/status/{})): {}",
+                            "* [{}](https://web.archive.org/web/{}/{}) ([live](https://twitter.com/{}/status/{})): {} <!--{}-->",
                             time,
                             item.timestamp(),
                             item.url,
                             tweet.user_screen_name,
                             tweet.id,
-                            escape_tweet_text(&tweet.text)
+                            escape_tweet_text(&tweet.text),
+                            tweet.id
                         );
                     } else {
                         println!(
-                            "* [{}](https://web.archive.org/web/{}/{}): {}",
+                            "* [{}](https://web.archive.org/web/{}/{}): {} <!--{}-->",
                             time,
                             item.timestamp(),
                             item.url,
-                            escape_tweet_text(&tweet.text)
+                            escape_tweet_text(&tweet.text),
+                            tweet.id
                         );
                     }
                 }
