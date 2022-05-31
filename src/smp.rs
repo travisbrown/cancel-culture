@@ -26,8 +26,6 @@ pub struct InteractionCounter {
 }
 
 use chrono::{NaiveDateTime, TimeZone};
-use html5ever::driver::ParseOpts;
-use html5ever::tendril::TendrilSink;
 use scraper::element_ref::ElementRef;
 use scraper::selector::Selector;
 use scraper::Html;
@@ -55,6 +53,8 @@ pub enum Error {
 const DATE_TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3fZ";
 
 lazy_static::lazy_static! {
+    static ref COLLECTION_SEL: Selector =
+        Selector::parse("div[itemtype='https://schema.org/Collection']").unwrap();
     static ref POSTING_SEL: Selector =
         Selector::parse("div[itemtype='https://schema.org/SocialMediaPosting']").unwrap();
     static ref IDENTIFIER_SEL: Selector = Selector::parse("meta[itemprop='identifier']").unwrap();
@@ -82,24 +82,23 @@ lazy_static::lazy_static! {
     static ref ARTICLE_BODY_SEL: Selector = Selector::parse("div[itemprop='articleBody'] span").unwrap();
 }
 
-pub fn parse_html<R: Read>(input: &mut R) -> Result<Html, std::io::Error> {
-    let parser =
-        html5ever::driver::parse_document(Html::new_document(), ParseOpts::default()).from_utf8();
+pub fn extract_postings(doc: &Html) -> Result<Option<Vec<Posting>>, Error> {
+    if is_collection(doc) {
+        let mut postings = doc
+            .select(&POSTING_SEL)
+            .map(|element| parse_posting(&element))
+            .collect::<Result<Vec<_>, Error>>()?;
 
-    parser.read_from(input)
+        postings.sort_by_key(|posting| posting.position);
+
+        Ok(Some(postings))
+    } else {
+        Ok(None)
+    }
 }
 
-pub fn parse_postings<R: Read>(input: &mut R) -> Result<Vec<Posting>, Error> {
-    let html = parse_html(input)?;
-
-    let mut postings = html
-        .select(&POSTING_SEL)
-        .map(|element| parse_posting(&element))
-        .collect::<Result<Vec<_>, Error>>()?;
-
-    postings.sort_by_key(|posting| posting.position);
-
-    Ok(postings)
+fn is_collection(doc: &Html) -> bool {
+    doc.select(&COLLECTION_SEL).next().is_some()
 }
 
 fn parse_posting(element: &ElementRef) -> Result<Posting, Error> {
@@ -219,12 +218,25 @@ fn get_property_value_date_time<'a>(
 
 #[cfg(test)]
 mod tests {
+    use html5ever::driver::ParseOpts;
+    use html5ever::tendril::TendrilSink;
+    use scraper::Html;
     use std::fs::File;
+    use std::io::Read;
+
+    fn extract<R: Read>(input: &mut R) -> Result<Vec<super::Posting>, super::Error> {
+        let parser = html5ever::driver::parse_document(Html::new_document(), ParseOpts::default())
+            .from_utf8();
+
+        let doc = parser.read_from(input)?;
+
+        Ok(super::extract_postings(&doc)?.unwrap_or_default())
+    }
 
     #[test]
     fn parse_postings() {
         let mut file = File::open("examples/wayback/1529393316344758279.html").unwrap();
-        let postings = super::parse_postings(&mut file).unwrap();
+        let postings = extract(&mut file).unwrap();
         assert_eq!(postings.len(), 11);
 
         let last = postings.last().unwrap();
