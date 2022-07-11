@@ -480,7 +480,17 @@ async fn main() -> Result<(), Error> {
                 if let Some(item) = by_id.get(&id) {
                     if report {
                         if let Some(content) = match store {
-                            Some(ref store) => store.read(&item.digest)?,
+                            Some(ref store) => match store.read(&item.digest) {
+                                Ok(content) => content,
+                                Err(error) => {
+                                    log::error!(
+                                        "Invalid UTF-8 bytes in item with digest {} and URL {}",
+                                        item.digest,
+                                        item.url
+                                    );
+                                    None
+                                }
+                            },
                             None => {
                                 log::info!("Downloading {}", item.url);
                                 match downloader.download_item(item).await {
