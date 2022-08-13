@@ -79,7 +79,7 @@ lazy_static::lazy_static! {
     static ref NAME_SEL: Selector = Selector::parse("meta[itemprop='name']").unwrap();
     static ref USER_INTERACTION_COUNT_SEL: Selector =
         Selector::parse("meta[itemprop='userInteractionCount']").unwrap();
-    static ref ARTICLE_BODY_SEL: Selector = Selector::parse("div[itemprop='articleBody'] span").unwrap();
+    static ref ARTICLE_BODY_SEL: Selector = Selector::parse("div[itemprop='articleBody']").unwrap();
 }
 
 pub fn extract_postings(doc: &Html) -> Result<Option<Vec<Posting>>, Error> {
@@ -162,6 +162,7 @@ fn get_text_descendents<'a>(element: &'a ElementRef, selector: &Selector) -> Vec
     element
         .select(selector)
         .flat_map(|element| element.text())
+        .filter(|value| value != &"…")
         .collect()
 }
 
