@@ -1,3 +1,4 @@
+use crate::smp::extract_postings;
 use chrono::{DateTime, TimeZone, Utc};
 use flate2::read::GzDecoder;
 use html5ever::driver::{self, ParseOpts};
@@ -158,9 +159,26 @@ pub fn extract_canonical_status_id(doc: &Html) -> Option<u64> {
 }
 
 pub fn extract_tweets(doc: &Html) -> Vec<BrowserTweet> {
-    doc.select(&TWEET_DIV_SEL)
-        .filter_map(|el| extract_div_tweet(&el))
-        .collect()
+    match extract_postings(doc) {
+        Ok(Some(postings)) => postings
+            .iter()
+            .map(|posting| {
+                BrowserTweet::new(
+                    posting.identifier.parse::<u64>().unwrap(),
+                    None,
+                    posting.date_created,
+                    posting.author.identifier.parse::<u64>().unwrap(),
+                    posting.author.additional_name.clone(),
+                    posting.author.given_name.clone(),
+                    posting.article_body.clone(),
+                )
+            })
+            .collect(),
+        _ => doc
+            .select(&TWEET_DIV_SEL)
+            .filter_map(|el| extract_div_tweet(&el))
+            .collect(),
+    }
 }
 
 pub fn extract_phcs(doc: &Html) -> Vec<(String, String, String, String, String, Option<String>)> {
