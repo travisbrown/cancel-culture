@@ -1,5 +1,9 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use scraper::element_ref::ElementRef;
+use scraper::selector::Selector;
+use scraper::Html;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Posting {
     pub identifier: String,
     pub position: u32,
@@ -8,28 +12,24 @@ pub struct Posting {
     pub date_published: DateTime<Utc>,
     pub url: String,
     pub author: Person,
-    pub is_part_of: String,
+    pub is_part_of: Option<String>,
     pub interaction_counters: Vec<InteractionCounter>,
     pub article_body: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Person {
     pub identifier: String,
     pub additional_name: String,
     pub given_name: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InteractionCounter {
     pub interaction_type: String,
     pub count: u32,
     pub url: String,
 }
-
-use chrono::{NaiveDateTime, TimeZone};
-use scraper::element_ref::ElementRef;
-use scraper::selector::Selector;
-use scraper::Html;
-use std::io::Read;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -111,12 +111,14 @@ fn parse_posting(element: &ElementRef) -> Result<Posting, Error> {
     let url = get_property_value(element, &URL_SEL, "url", false)?;
     let author_element = get_child(element, &AUTHOR_SEL, "author")?;
     let author = parse_person(&author_element)?;
-    let is_part_of = get_property_value(element, &IS_PART_OF_SEL, "isPartOf", true)?;
-    let article_body_element = get_child(element, &ARTICLE_BODY_SEL, "articleBody")?;
-    let article_body = article_body_element
-        .text()
-        .next()
-        .ok_or_else(|| Error::MissingChild("articleBody".to_string()))?;
+    let is_part_of = get_optional_property_value(element, &IS_PART_OF_SEL, "isPartOf", true)?;
+    let article_body = match get_first_child(element, &ARTICLE_BODY_SEL, "articleBody") {
+        Ok(value) => value
+            .text()
+            .next()
+            .ok_or_else(|| Error::MissingChild("articleBody".to_string())),
+        Err(_) => Ok(""),
+    }?;
 
     Ok(Posting {
         identifier: identifier.to_string(),
@@ -126,7 +128,7 @@ fn parse_posting(element: &ElementRef) -> Result<Posting, Error> {
         date_published,
         url: url.to_string(),
         author,
-        is_part_of: is_part_of.to_string(),
+        is_part_of: is_part_of.map(|value| value.to_string()),
         interaction_counters: Vec::new(),
         article_body: article_body.to_string(),
     })
@@ -162,6 +164,19 @@ fn get_child<'a>(
     }
 }
 
+fn get_first_child<'a>(
+    element: &'a ElementRef,
+    selector: &Selector,
+    name: &str,
+) -> Result<ElementRef<'a>, Error> {
+    let mut selected = element.select(selector);
+    let first = selected
+        .next()
+        .ok_or_else(|| Error::MissingChild(name.to_string()))?;
+
+    Ok(first)
+}
+
 fn get_property_value<'a>(
     element: &'a ElementRef,
     selector: &Selector,
@@ -185,6 +200,29 @@ fn get_property_value<'a>(
     }
 }
 
+fn get_optional_property_value<'a>(
+    element: &'a ElementRef,
+    selector: &Selector,
+    name: &str,
+    unique: bool,
+) -> Result<Option<&'a str>, Error> {
+    let mut selected = element.select(selector);
+    if let Some(first) = selected.next() {
+        let content = first
+            .value()
+            .attr("content")
+            .ok_or_else(|| Error::InvalidProperty(name.to_string()))?;
+
+        if !unique || selected.next().is_none() {
+            Ok(Some(content))
+        } else {
+            Err(Error::DuplicateProperty(name.to_string()))
+        }
+    } else {
+        Ok(None)
+    }
+}
+
 fn get_property_value_u32<'a>(
     element: &'a ElementRef,
     selector: &Selector,
@@ -203,12 +241,6 @@ fn get_property_value_date_time<'a>(
     name: &str,
 ) -> Result<DateTime<Utc>, Error> {
     let content = get_property_value(element, selector, name, true)?;
-
-    println!(
-        "{}, {:?}",
-        content,
-        NaiveDateTime::parse_from_str(content, DATE_TIME_FORMAT)
-    );
 
     Ok(Utc.from_utc_datetime(
         &NaiveDateTime::parse_from_str(content, DATE_TIME_FORMAT)
