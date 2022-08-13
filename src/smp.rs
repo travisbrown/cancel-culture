@@ -112,13 +112,7 @@ fn parse_posting(element: &ElementRef) -> Result<Posting, Error> {
     let author_element = get_child(element, &AUTHOR_SEL, "author")?;
     let author = parse_person(&author_element)?;
     let is_part_of = get_optional_property_value(element, &IS_PART_OF_SEL, "isPartOf", true)?;
-    let article_body = match get_first_child(element, &ARTICLE_BODY_SEL, "articleBody") {
-        Ok(value) => value
-            .text()
-            .next()
-            .ok_or_else(|| Error::MissingChild("articleBody".to_string())),
-        Err(_) => Ok(""),
-    }?;
+    let article_body = get_text_descendents(element, &ARTICLE_BODY_SEL).join("");
 
     Ok(Posting {
         identifier: identifier.to_string(),
@@ -130,7 +124,7 @@ fn parse_posting(element: &ElementRef) -> Result<Posting, Error> {
         author,
         is_part_of: is_part_of.map(|value| value.to_string()),
         interaction_counters: Vec::new(),
-        article_body: article_body.to_string(),
+        article_body,
     })
 }
 
@@ -164,17 +158,11 @@ fn get_child<'a>(
     }
 }
 
-fn get_first_child<'a>(
-    element: &'a ElementRef,
-    selector: &Selector,
-    name: &str,
-) -> Result<ElementRef<'a>, Error> {
-    let mut selected = element.select(selector);
-    let first = selected
-        .next()
-        .ok_or_else(|| Error::MissingChild(name.to_string()))?;
-
-    Ok(first)
+fn get_text_descendents<'a>(element: &'a ElementRef, selector: &Selector) -> Vec<&'a str> {
+    element
+        .select(selector)
+        .flat_map(|element| element.text())
+        .collect()
 }
 
 fn get_property_value<'a>(
