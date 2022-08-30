@@ -380,6 +380,7 @@ async fn main() -> Result<(), Error> {
         SubCommand::DeletedTweets {
             limit,
             report,
+            include_failed,
             ref store,
             ref cdx,
             ref screen_name,
@@ -476,6 +477,8 @@ async fn main() -> Result<(), Error> {
                 s.save_all(&downloader, &items, true, 4).await?;
             }
 
+            let mut empty_items = vec![];
+
             for (id, _) in deleted {
                 if let Some(item) = by_id.get(&id) {
                     if report {
@@ -528,6 +531,7 @@ async fn main() -> Result<(), Error> {
                             }
 
                             if tweets.is_empty() {
+                                empty_items.push(item);
                                 log::warn!("Unable to find tweets for {}", item.url);
                             }
 
@@ -601,6 +605,19 @@ async fn main() -> Result<(), Error> {
                         );
                     }
                 }
+
+                if include_failed && !empty_items.is_empty() {
+                    println!("\n{} URLs could not be parsed:\n", empty_items.len());
+
+                    for item in empty_items {
+                        println!(
+                            "* [{}](https://web.archive.org/web/{}/{})",
+                            item.url,
+                            item.timestamp(),
+                            item.url
+                        );
+                    }
+                }
             }
 
             log::logger().flush();
@@ -651,6 +668,9 @@ enum SubCommand {
         /// Print a Markdown report with full text
         #[clap(short = 'r', long)]
         report: bool,
+        /// Include a list of URL snapshots that could not be parsed
+        #[clap(long)]
+        include_failed: bool,
         /// Local store directory for downloaded Wayback files
         #[clap(short = 's', long)]
         store: Option<String>,
