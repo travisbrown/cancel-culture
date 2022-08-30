@@ -16,7 +16,7 @@ csv="1.1"
 data-encoding = "2.3"
 displaydoc = "0.2"
 egg-mode = "0.16"
-egg-mode-extras = "0.2.2"
+egg-mode-extras = "0.3"
 fantoccini = { version = "0.19", features = [ "rustls-tls" ] }
 file_diff = "1.0"
 flate2 = "1.0"
