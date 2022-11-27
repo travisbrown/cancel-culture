@@ -145,16 +145,17 @@ async fn main() -> Void {
 
             let tweet_store = wbm::tweet::db::TweetStore::new(db, false)?;
             let mut results = tweet_store.get_tweet(&status_ids).await?;
-            results.sort_by_key(|(tweet, _)| (tweet.user_screen_name.to_lowercase(), tweet.id));
+            results.sort_by_key(|(tweet, _)| (tweet.id, tweet.user_id));
 
             let mut out = csv::WriterBuilder::new().from_writer(std::io::stdout());
             let space_re = regex::Regex::new(r" +").unwrap();
 
             for (tweet, digest) in results {
                 out.write_record(&[
-                    tweet.user_screen_name,
                     tweet.id.to_string(),
-                    digest,
+                    tweet.time.timestamp().to_string(),
+                    tweet.user_id.to_string(),
+                    tweet.user_screen_name,
                     space_re
                         .replace_all(&tweet.text.trim().replace('\n', "\\n"), " ")
                         .to_string(),
