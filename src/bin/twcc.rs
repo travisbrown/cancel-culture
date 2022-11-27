@@ -1,8 +1,9 @@
 use cancel_culture::{cli, reports::deleted_tweets::DeletedTweetReport, wbm};
+use chrono::{DateTime, SubsecRound, Utc};
 use clap::Parser;
 use egg_mode::{tweet::Tweet, user::TwitterUser};
 use egg_mode_extras::{client::TokenType, util::extract_status_id};
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
@@ -33,6 +34,10 @@ pub enum Error {
     WaybackDownloader(#[from] wayback_rs::downloader::Error),
     #[error("Wayback Machine store error")]
     WbmStoreError(#[from] wbm::store::Error),
+    #[error("Timestamp field collision")]
+    TimestampFieldCollision(serde_json::Value),
+    #[error("Invalid profile JSON")]
+    InvalidProfileJson(serde_json::Value),
 }
 
 #[tokio::main]
@@ -199,6 +204,20 @@ async fn main() -> Result<(), Error> {
             })
             .await
             .map_err(Error::from),
+        SubCommand::ListTweetsJson { id, count } => {
+            client
+                .user_tweets(id, true, true, TokenType::App)
+                .take(count.unwrap_or(usize::MAX))
+                .map_err(Error::from)
+                .try_for_each(|tweet| async move {
+                    let mut json = serde_json::json!(tweet);
+                    let now = Utc::now().trunc_subsecs(0);
+                    timestamp_json(&mut json, now)?;
+                    println!("{}", json);
+                    Ok(())
+                })
+                .await
+        }
         SubCommand::LookupTweets {
             retweets,
             media,
@@ -723,6 +742,11 @@ enum SubCommand {
         /// The user whose tweets you want to list
         screen_name: String,
     },
+    ListTweetsJson {
+        id: u64,
+        #[clap(long)]
+        count: Option<usize>,
+    },
     /// Read tweet IDs from stdin and print info
     LookupTweets {
         /// Include retweet information
@@ -794,4 +818,18 @@ fn tweet_to_report(
     }
 
     result
+}
+
+fn timestamp_json(value: &mut serde_json::Value, now: DateTime<Utc>) -> Result<(), Error> {
+    if let Some(fields) = value.as_object_mut() {
+        if let Some(previous_value) =
+            fields.insert("snapshot".to_string(), serde_json::json!(now.timestamp()))
+        {
+            Err(Error::TimestampFieldCollision(previous_value))
+        } else {
+            Ok(())
+        }
+    } else {
+        Err(Error::InvalidProfileJson(value.clone()))
+    }
 }
