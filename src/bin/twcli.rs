@@ -227,8 +227,8 @@ struct Opts {
     #[clap(short, long, default_value = "keys.toml")]
     key_file: String,
     /// Level of verbosity
-    #[clap(short, long, parse(from_occurrences))]
-    verbose: i32,
+    #[clap(short, long, global = true, action = clap::ArgAction::Count)]
+    verbose: u8,
     #[clap(subcommand)]
     command: SubCommand,
 }

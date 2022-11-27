@@ -1,7 +1,7 @@
 use simplelog::LevelFilter;
 use std::io::Read;
 
-fn select_log_level_filter(verbosity: i32) -> LevelFilter {
+fn select_log_level_filter(verbosity: u8) -> LevelFilter {
     match verbosity {
         0 => LevelFilter::Off,
         1 => LevelFilter::Error,
@@ -12,7 +12,7 @@ fn select_log_level_filter(verbosity: i32) -> LevelFilter {
     }
 }
 
-pub fn init_logging(verbosity: i32) -> Result<(), log::SetLoggerError> {
+pub fn init_logging(verbosity: u8) -> Result<(), log::SetLoggerError> {
     simplelog::TermLogger::init(
         select_log_level_filter(verbosity),
         simplelog::Config::default(),

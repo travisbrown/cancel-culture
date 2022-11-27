@@ -51,8 +51,8 @@ pub enum Error {
 #[clap(name = "cdxdl", version, author)]
 struct Opts {
     /// Level of verbosity
-    #[clap(short, long, parse(from_occurrences))]
-    verbose: i32,
+    #[clap(short, long, global = true, action = clap::ArgAction::Count)]
+    verbose: u8,
     /// Query URL
     #[clap(short, long)]
     query: String,

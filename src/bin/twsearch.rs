@@ -48,7 +48,7 @@ struct Opts {
     disable_headless: bool,
     #[clap(short, long, default_value = "chrome")]
     /// Level of verbosity
-    #[clap(short, long, parse(from_occurrences))]
-    verbose: i32,
+    #[clap(short, long, global = true, action = clap::ArgAction::Count)]
+    verbose: u8,
     browser: String,
 }

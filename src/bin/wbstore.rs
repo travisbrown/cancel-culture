@@ -186,8 +186,8 @@ struct Opts {
     #[clap(short, long, default_value = "wayback")]
     store_dir: String,
     /// Level of verbosity
-    #[clap(short, long, parse(from_occurrences))]
-    verbose: i32,
+    #[clap(short, long, global = true, action = clap::ArgAction::Count)]
+    verbose: u8,
     /// Level of parallelism
     #[clap(short, long, default_value = "6")]
     parallelism: usize,

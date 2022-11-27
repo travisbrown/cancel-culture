@@ -11,7 +11,7 @@ license = "MPL-2.0"
 anyhow = "1.0"
 bytes = "1.0"
 chrono = "0.4"
-clap = { version = "3", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
 csv="1.1"
 data-encoding = "2.3"
 displaydoc = "0.2"
@@ -50,7 +50,7 @@ tinytemplate = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tokio-test = "0.4"
 toml = "0.5"
-tryhard = "0.4"
+tryhard = "0.5"
 url = "2.2"
 wayback-rs = "0.5.1"
 

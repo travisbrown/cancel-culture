@@ -40,8 +40,8 @@ async fn main() -> Void {
 #[clap(name = "wbmc", version, author)]
 struct Opts {
     /// Level of verbosity
-    #[clap(short, long, parse(from_occurrences))]
-    verbose: i32,
+    #[clap(short, long, global = true, action = clap::ArgAction::Count)]
+    verbose: u8,
     /// Level of parallelism
     #[clap(short, long, default_value = "6")]
     _parallelism: usize,
