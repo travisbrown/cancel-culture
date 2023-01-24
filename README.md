@@ -1,6 +1,6 @@
 ## Overview
 
-[![Build status](https://img.shields.io/github/workflow/status/travisbrown/cancel-culture/ci.svg)](https://github.com/travisbrown/cancel-culture/actions)
+[![Build status](https://img.shields.io/github/actions/workflow/status/travisbrown/cancel-culture/ci.yaml?branch=main)](https://github.com/travisbrown/cancel-culture/actions)
 [![Coverage status](https://img.shields.io/codecov/c/github/travisbrown/cancel-culture/main.svg)](https://codecov.io/github/travisbrown/cancel-culture)
 
 This repository contains some low-tech tools designed to help you make Twitter a nicer place for
