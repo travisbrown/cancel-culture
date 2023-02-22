@@ -49,7 +49,7 @@ time = "0.3"
 tinytemplate = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tokio-test = "0.4"
-toml = "0.6"
+toml = "0.7"
 tryhard = "0.5"
 url = "2.2"
 wayback-rs = "0.5.1"
