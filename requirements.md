@@ -15,7 +15,17 @@ cargo update
 You also need to grab [ChromeDriver](https://chromedriver.chromium.org/) or
 [GeckoDriver](https://github.com/mozilla/geckodriver).
 
-You also need a good text editor. I used Visual Studio Code from Microsoft
+Check if the softwares have been properly installed by using the following:
+
+```
+software_name_like_chromedriver --version
+```
+
+## Download Github Desktop and a text editor
+
+[Github Desktop](https://desktop.github.com/download/)
+
+You also need a good text editor. I used this one:
 
 [Visual Studio Code](https://code.visualstudio.com/)
 
