@@ -93,7 +93,8 @@ Replace "Your commit message" with a description of the changes you made.
 Use 'git push' tp publish file
 
 ```
-git push```
+git push
+```
 
 Go to web page url to see if live. 
 
