@@ -1,4 +1,4 @@
-##Setup
+## Setup
 
 You'll need to [install Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html).
 
@@ -16,4 +16,3 @@ You also need to grab [ChromeDriver] (https://chromedriver.chromium.org/) or
 [GeckoDriver](https://github.com/mozilla/geckodriver).
 
 Find the version of ChromeDriver that matches your Google Chrome version and download it to install. 
-
