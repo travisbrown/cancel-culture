@@ -18,4 +18,5 @@ You also need to grab [ChromeDriver](https://chromedriver.chromium.org/) or
 ## Other useful installs
 
 [Homebrew](https://brew.sh/)
+
 [Xcode](https://developer.apple.com/xcode/)
