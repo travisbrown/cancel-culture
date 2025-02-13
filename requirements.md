@@ -15,8 +15,14 @@ cargo update
 You also need to grab [ChromeDriver](https://chromedriver.chromium.org/) or
 [GeckoDriver](https://github.com/mozilla/geckodriver).
 
-## Other useful installs
+You also need a good text editor. I used Visual Studio Code from Microsoft
+
+[Visual Studio Code](https://code.visualstudio.com/)
+
+**Other useful installs**
 
 [Homebrew](https://brew.sh/)
 
 [Xcode](https://developer.apple.com/xcode/)
+
+For assistance, try using a ChatGPT for help in walking you through how to install. 
