@@ -53,7 +53,8 @@ target/release/twcc -vvv deleted-tweets --include-failed --no-api --report --sto
 
 This command will generate a report about deleted tweets for the given SCREEN_NAME and save it as a .md file.
 
-## Step 6: Copy and paste the .md File to Gists 
+## Step 6: Copy and paste the .md File to Gist  
 
 [Gist](https://gist.github.com/)
 
+Share URL with users
