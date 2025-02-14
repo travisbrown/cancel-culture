@@ -53,48 +53,7 @@ target/release/twcc -vvv deleted-tweets --include-failed --no-api --report --sto
 
 This command will generate a report about deleted tweets for the given SCREEN_NAME and save it as a .md file.
 
-## Step 6: Publish the .md File
+## Step 6: Copy and paste the .md File to Gists 
 
-**A. First, initialize a Git Repository (if not already done).**
-
-If your project is not already initialized as a Git repository, follow these steps:
-
-- Open VSCode and open your project folder.
-- Open the Terminal in VSCode (Ctrl + ~ or Cmd + ~ on macOS).
-
-If your project folder isn’t a Git repository, initialize it by running:
-
-```
-git init
-```
-
-**B. Stage Your Files**
-
-Now that your project is initialized as a Git repository, you need to add files to Git.
-
-Stage all files in the repository (this adds them to the staging area to be committed):
-
-```
-git add .
-```
-This will stage all files in the folder. If you only want to add specific files, replace . with the filenames.
-
-**C: Commit Your Changes**
-After staging the files, commit them to the repository with a meaningful message:
-
-Run the following command:
-
-```
-git commit -m "Your commit message"
-```
-
-Replace "Your commit message" with a description of the changes you made.
-
-Use 'git push' tp publish file
-
-```
-git push
-```
-
-Go to web page url to see if live. 
+[Gist](https://gist.github.com/)
 
