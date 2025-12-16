@@ -11,7 +11,8 @@ const PAGE_SIZE: usize = 150000;
 async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
     let _ = cancel_culture::cli::init_logging(opts.verbose)?;
-    let client = IndexClient::default();
+    let pacer = cancel_culture::wbm::pacer::default_wayback_pacer();
+    let client = IndexClient::default().with_pacer(pacer);
 
     let output_path = opts
         .output

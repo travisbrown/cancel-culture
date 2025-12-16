@@ -404,8 +404,9 @@ async fn main() -> Result<(), Error> {
             ref cdx,
             ref screen_name,
         } => {
-            let index_client = wayback_rs::cdx::IndexClient::default();
-            let downloader = wayback_rs::Downloader::default();
+            let pacer = cancel_culture::wbm::pacer::default_wayback_pacer();
+            let index_client = wayback_rs::cdx::IndexClient::default().with_pacer(pacer.clone());
+            let downloader = wayback_rs::Downloader::default().with_pacer(pacer);
             let mut items = match cdx {
                 Some(cdx_path) => {
                     let cdx_file = File::open(cdx_path).map_err(Error::CdxJson)?;

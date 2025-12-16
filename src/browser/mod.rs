@@ -3,7 +3,6 @@ pub mod twitter;
 
 pub use scroller::Scroller;
 
-use fantoccini::error::NewSessionError;
 use fantoccini::{Client, ClientBuilder};
 
 pub async fn make_client(
@@ -11,7 +10,7 @@ pub async fn make_client(
     headless: bool,
     host: Option<&str>,
     port: Option<u16>,
-) -> Result<Client, NewSessionError> {
+) -> anyhow::Result<Client> {
     match name {
         "firefox" => {
             let mut caps = serde_json::map::Map::new();
@@ -22,10 +21,11 @@ pub async fn make_client(
             };
             let opts = { serde_json::json!({ "args": args }) };
             caps.insert("moz:firefoxOptions".to_string(), opts.clone());
-            ClientBuilder::rustls()
+            ClientBuilder::rustls()?
                 .capabilities(caps)
                 .connect(&make_url(host, port.unwrap_or(4444)))
                 .await
+                .map_err(Into::into)
         }
         "chrome" => {
             let mut caps = serde_json::map::Map::new();
@@ -55,10 +55,11 @@ pub async fn make_client(
             });
             caps.insert("goog:chromeOptions".to_string(), opts.clone());
 
-            ClientBuilder::rustls()
+            ClientBuilder::rustls()?
                 .capabilities(caps)
                 .connect(&make_url(host, port.unwrap_or(9515)))
                 .await
+                .map_err(Into::into)
         }
         browser => unimplemented!("unsupported browser backend {}", browser),
     }
