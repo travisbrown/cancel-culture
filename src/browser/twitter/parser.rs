@@ -226,8 +226,92 @@ fn extract_phc(
 }
 
 pub fn extract_tweet_json(content: &str) -> Option<BrowserTweet> {
-    let t: serde_json::Result<TweetJson> = serde_json::from_str(content);
-    t.ok().map(|v| v.into_browser_tweet())
+    // Twitter snapshots in the Wayback Machine may be either:
+    //
+    // - Legacy Twitter JSON (e.g. `timestamp_ms`, `extended_tweet`, etc)
+    // - Modern Twitter API v2-ish JSON payloads (often `data` + optional `includes`)
+    //
+    // Parse once, detect by shape, then extract with fallbacks. This avoids parsing the
+    // same JSON twice and is resilient to extra fields / schema drift.
+    let v: serde_json::Value = serde_json::from_str(content).ok()?;
+
+    // ---- Legacy ("tweet" JSON from older Twitter clients) ----
+    if v.get("timestamp_ms").is_some() {
+        let t: TweetJson = serde_json::from_value(v).ok()?;
+        return Some(t.into_browser_tweet());
+    }
+
+    // ---- v2-ish ("Twitter API v2" style) ----
+    // Examples commonly look like:
+    // {
+    //   "data": { "id": "...", "author_id": "...", "created_at": "...", "text": "...", ... },
+    //   "includes": { "users": [ { "id": "...", "username": "...", "name": "..." }, ... ] },
+    //   ...
+    // }
+    //
+    // Some responses may have `data` as an array; in that case we take the first element.
+    let data = v.get("data")?;
+    let data_obj = match data {
+        serde_json::Value::Object(map) => serde_json::Value::Object(map.clone()),
+        serde_json::Value::Array(items) => items.first().cloned()?,
+        _ => return None,
+    };
+
+    fn as_str(v: Option<&serde_json::Value>) -> Option<&str> {
+        v.and_then(|v| v.as_str())
+    }
+
+    fn as_u64(v: Option<&serde_json::Value>) -> Option<u64> {
+        match v? {
+            serde_json::Value::Number(n) => n.as_u64(),
+            serde_json::Value::String(s) => s.parse::<u64>().ok(),
+            _ => None,
+        }
+    }
+
+    let id = as_u64(data_obj.get("id"))?;
+    let user_id = as_u64(data_obj.get("author_id")).unwrap_or(0);
+    let parent_id = as_u64(data_obj.get("conversation_id")).filter(|pid| *pid != id);
+    let text = as_str(data_obj.get("text")).unwrap_or("").to_string();
+
+    // created_at is usually RFC3339. If missing/unparseable, fall back to 0ms.
+    let timestamp_ms = as_str(data_obj.get("created_at"))
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.timestamp_millis())
+        .unwrap_or(0);
+
+    // Best-effort author identity via includes.users[]; if missing, default placeholders.
+    let mut user_screen_name: Option<String> = None;
+    let mut user_name: Option<String> = None;
+
+    if let Some(author_id_str) = as_str(data_obj.get("author_id")) {
+        if let Some(users) = v
+            .get("includes")
+            .and_then(|inc| inc.get("users"))
+            .and_then(|u| u.as_array())
+        {
+            for u in users {
+                if as_str(u.get("id")) == Some(author_id_str) {
+                    user_screen_name = as_str(u.get("username")).map(|s| s.to_string());
+                    user_name = as_str(u.get("name")).map(|s| s.to_string());
+                    break;
+                }
+            }
+        }
+    }
+
+    let user_screen_name = user_screen_name.unwrap_or_else(|| "unknown".to_string());
+    let user_name = user_name.unwrap_or_else(|| "unknown".to_string());
+
+    Some(BrowserTweet::new_with_timestamp(
+        id,
+        parent_id,
+        timestamp_ms,
+        user_id,
+        user_screen_name,
+        user_name,
+        text,
+    ))
 }
 
 fn extract_div_tweet(element_ref: &ElementRef) -> Option<BrowserTweet> {

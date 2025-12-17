@@ -646,10 +646,21 @@ async fn main() -> Result<(), Error> {
                     None => HashMap::default(),
                 };
 
-                let deleted_count = deleted_status.iter().filter(|(_, v)| !*v).count();
-                let undeleted_count = report_items_vec.len() - deleted_count;
+                // In `--no-api` mode we intentionally skip Twitter API checks, so we don't know
+                // which tweets are currently available. For report output, treat all items as
+                // "deleted/unknown" (i.e., no live links) and count them as deleted.
+                let deleted_count = if client.is_none() {
+                    report_items_vec.len()
+                } else {
+                    deleted_status.iter().filter(|(_, v)| !*v).count()
+                };
+                let undeleted_count = report_items_vec.len().saturating_sub(deleted_count);
 
-                let report = DeletedTweetReport::new(screen_name, deleted_count, undeleted_count);
+                let report = if client.is_none() {
+                    DeletedTweetReport::archived(screen_name, deleted_count, undeleted_count)
+                } else {
+                    DeletedTweetReport::new(screen_name, deleted_count, undeleted_count)
+                };
 
                 println!("{}", report);
 
