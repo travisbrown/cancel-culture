@@ -3,6 +3,7 @@ use clap::Parser;
 use futures::TryStreamExt;
 use futures_locks::Mutex;
 use std::fs::File;
+use std::sync::Arc;
 use wayback_rs::cdx::IndexClient;
 
 const PAGE_SIZE: usize = 150000;
@@ -11,7 +12,24 @@ const PAGE_SIZE: usize = 150000;
 async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
     let _ = cancel_culture::cli::init_logging(opts.verbose)?;
-    let client = IndexClient::default();
+    let adaptive = cancel_culture::wbm::pacer::adaptive_wayback_pacer();
+    let (pacer, observer) = match opts.wayback_pacing {
+        cancel_culture::wbm::pacer::WaybackPacingProfile::Adaptive => {
+            (adaptive.pacer, Some(adaptive.observer))
+        }
+        _ => (cancel_culture::wbm::pacer::wayback_pacer(opts.wayback_pacing), None),
+    };
+    let mut client = IndexClient::default().with_pacer(pacer);
+    if let Some(observer) = observer {
+        client = client.with_observer(observer);
+    }
+
+    if matches!(
+        opts.wayback_pacing,
+        cancel_culture::wbm::pacer::WaybackPacingProfile::Adaptive
+    ) {
+        install_pacing_stats_signal_handler(Arc::new(adaptive.stats));
+    }
 
     let output_path = opts
         .output
@@ -35,6 +53,50 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
+fn install_pacing_stats_signal_handler(stats: Arc<cancel_culture::wbm::pacer::AdaptiveStats>) {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, Signal, SignalKind};
+
+        tokio::spawn(async move {
+            let mut usr1 = match signal(SignalKind::user_defined1()) {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+
+            #[cfg(target_os = "macos")]
+            let mut siginfo: Option<Signal> = match signal(SignalKind::info()) {
+                Ok(s) => Some(s),
+                Err(_) => None,
+            };
+
+            loop {
+                #[cfg(target_os = "macos")]
+                tokio::select! {
+                    _ = usr1.recv() => {
+                        eprintln!("{}", stats.format());
+                    }
+                    _ = async {
+                        if let Some(s) = siginfo.as_mut() {
+                            s.recv().await;
+                        } else {
+                            std::future::pending::<()>().await;
+                        }
+                    } => {
+                        eprintln!("{}", stats.format());
+                    }
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    usr1.recv().await;
+                    eprintln!("{}", stats.format());
+                }
+            }
+        });
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("I/O error: {0:?}")]
@@ -53,6 +115,9 @@ struct Opts {
     /// Level of verbosity
     #[clap(short, long, global = true, action = clap::ArgAction::Count)]
     verbose: u8,
+    /// Wayback pacing profile (controls token-bucket pacing for CDX and content requests)
+    #[clap(long, value_enum, default_value_t = cancel_culture::wbm::pacer::WaybackPacingProfile::Default)]
+    wayback_pacing: cancel_culture::wbm::pacer::WaybackPacingProfile,
     /// Query URL
     #[clap(short, long)]
     query: String,

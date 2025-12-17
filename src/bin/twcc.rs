@@ -9,6 +9,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
+use std::sync::Arc;
 
 const CDX_PAGE_LIMIT: usize = 150000;
 
@@ -44,8 +45,6 @@ pub enum Error {
 async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
     let _ = cli::init_logging(opts.verbose).unwrap();
-
-    let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
 
     match opts.command {
         SubCommand::ListFollowers {
@@ -115,6 +114,7 @@ async fn main() -> Result<(), Error> {
             Ok(())
         }
         SubCommand::ListBlocks { ids_only } => {
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             let ids: Vec<u64> = client.blocked_ids().try_collect::<Vec<_>>().await?;
             if ids_only {
                 for id in ids {
@@ -130,6 +130,7 @@ async fn main() -> Result<(), Error> {
             Ok(())
         }
         SubCommand::ListUnmutuals => {
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             let follower_ids: HashSet<u64> = client
                 .self_follower_ids()
                 .try_collect::<HashSet<_>>()
@@ -162,6 +163,7 @@ async fn main() -> Result<(), Error> {
             Ok(())
         }
         SubCommand::ImportBlocks => {
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             let stdin = std::io::stdin();
             let mut buffer = String::new();
             let mut handle = stdin.lock();
@@ -193,18 +195,22 @@ async fn main() -> Result<(), Error> {
             media,
             withheld,
             screen_name,
-        } => client
-            .user_tweets(screen_name, true, retweets, TokenType::App)
-            .try_for_each(|tweet| async move {
-                println!(
-                    "{}",
-                    tweet_to_report(&tweet, retweets, media, withheld, false)
-                );
-                Ok(())
-            })
-            .await
-            .map_err(Error::from),
+        } => {
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
+            client
+                .user_tweets(screen_name, true, retweets, TokenType::App)
+                .try_for_each(|tweet| async move {
+                    println!(
+                        "{}",
+                        tweet_to_report(&tweet, retweets, media, withheld, false)
+                    );
+                    Ok(())
+                })
+                .await
+                .map_err(Error::from)
+        }
         SubCommand::ListTweetsJson { id, count } => {
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             client
                 .user_tweets(id, true, true, TokenType::App)
                 .take(count.unwrap_or(usize::MAX))
@@ -223,6 +229,7 @@ async fn main() -> Result<(), Error> {
             media,
             withheld,
         } => {
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             let stdin = std::io::stdin();
             let mut buffer = String::new();
             let mut handle = stdin.lock();
@@ -258,6 +265,7 @@ async fn main() -> Result<(), Error> {
                 .map_err(Error::from)
         }
         SubCommand::LookupReply { query } => {
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             let reply_id = extract_status_id(&query).ok_or_else(|| Error::TweetIdParse(query))?;
             match client.lookup_reply_parent(reply_id, TokenType::App).await? {
                 Some((user, id)) => {
@@ -268,6 +276,7 @@ async fn main() -> Result<(), Error> {
             }
         }
         SubCommand::BlockedFollows { screen_name } => {
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             let blocks = client.blocked_ids().try_collect::<HashSet<u64>>().await?;
             let blocked_friends = client
                 .followed_ids(screen_name.clone(), TokenType::App)
@@ -294,6 +303,7 @@ async fn main() -> Result<(), Error> {
             Ok(())
         }
         SubCommand::FollowerReport { screen_name } => {
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             let blocks = client.blocked_ids().try_collect::<HashSet<u64>>().await?;
             let their_followers = client
                 .follower_ids(screen_name.clone(), TokenType::App)
@@ -377,6 +387,7 @@ async fn main() -> Result<(), Error> {
             Ok(())
         }
         SubCommand::CheckExistence => {
+            let client = egg_mode_extras::Client::from_config_file(&opts.key_file).await?;
             let stdin = std::io::stdin();
             let mut buffer = String::new();
             let mut handle = stdin.lock();
@@ -403,9 +414,35 @@ async fn main() -> Result<(), Error> {
             ref store,
             ref cdx,
             ref screen_name,
+            no_api,
         } => {
-            let index_client = wayback_rs::cdx::IndexClient::default();
-            let downloader = wayback_rs::Downloader::default();
+            let client = if no_api {
+                None
+            } else {
+                Some(egg_mode_extras::Client::from_config_file(&opts.key_file).await?)
+            };
+            let adaptive = cancel_culture::wbm::pacer::adaptive_wayback_pacer();
+            let (pacer, observer) = match opts.wayback_pacing {
+                cancel_culture::wbm::pacer::WaybackPacingProfile::Adaptive => {
+                    (adaptive.pacer, Some(adaptive.observer))
+                }
+                _ => (cancel_culture::wbm::pacer::wayback_pacer(opts.wayback_pacing), None),
+            };
+
+            if matches!(
+                opts.wayback_pacing,
+                cancel_culture::wbm::pacer::WaybackPacingProfile::Adaptive
+            ) {
+                install_pacing_stats_signal_handler(Arc::new(adaptive.stats));
+            }
+
+            let mut index_client = wayback_rs::cdx::IndexClient::default().with_pacer(pacer.clone());
+            let mut downloader = wayback_rs::Downloader::default().with_pacer(pacer);
+
+            if let Some(observer) = observer {
+                index_client = index_client.with_observer(observer.clone());
+                downloader = downloader.with_observer(observer);
+            }
             let mut items = match cdx {
                 Some(cdx_path) => {
                     let cdx_file = File::open(cdx_path).map_err(Error::CdxJson)?;
@@ -466,15 +503,24 @@ async fn main() -> Result<(), Error> {
                 }
             }
 
-            let deleted_status = client
-                .lookup_tweets(by_id.iter().map(|(k, _)| *k), TokenType::App)
-                .try_collect::<Vec<_>>()
-                .await?;
+            let deleted_status = match &client {
+                Some(client) => Some(
+                    client
+                        .lookup_tweets(by_id.iter().map(|(k, _)| *k), TokenType::App)
+                        .try_collect::<Vec<_>>()
+                        .await?,
+                ),
+                None => None,
+            };
 
             let mut deleted = deleted_status
-                .into_iter()
-                .filter(|(_, v)| v.is_none())
-                .collect::<Vec<_>>();
+                .map(|deleted_status| {
+                    deleted_status
+                        .into_iter()
+                        .filter(|(_, v)| v.is_none())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_else(|| by_id.iter().map(|(id, _)| (*id, None)).collect());
 
             deleted.sort_by_key(|(k, _)| *k);
 
@@ -586,16 +632,35 @@ async fn main() -> Result<(), Error> {
                 let mut report_items_vec = report_items.iter().collect::<Vec<_>>();
                 report_items_vec.sort_unstable_by_key(|(k, _)| -(**k as i64));
 
-                let deleted_status = client
-                    .lookup_tweets(report_items_vec.iter().map(|(k, _)| **k), TokenType::App)
-                    .map_ok(|(k, v)| (k, v.is_some()))
-                    .try_collect::<HashMap<_, _>>()
-                    .await?;
+                let deleted_status = match &client {
+                    Some(client) => {
+                        client
+                            .lookup_tweets(
+                                report_items_vec.iter().map(|(k, _)| **k),
+                                TokenType::App,
+                            )
+                            .map_ok(|(k, v)| (k, v.is_some()))
+                            .try_collect::<HashMap<_, _>>()
+                            .await?
+                    }
+                    None => HashMap::default(),
+                };
 
-                let deleted_count = deleted_status.iter().filter(|(_, v)| !*v).count();
-                let undeleted_count = report_items_vec.len() - deleted_count;
+                // In `--no-api` mode we intentionally skip Twitter API checks, so we don't know
+                // which tweets are currently available. For report output, treat all items as
+                // "deleted/unknown" (i.e., no live links) and count them as deleted.
+                let deleted_count = if client.is_none() {
+                    report_items_vec.len()
+                } else {
+                    deleted_status.iter().filter(|(_, v)| !*v).count()
+                };
+                let undeleted_count = report_items_vec.len().saturating_sub(deleted_count);
 
-                let report = DeletedTweetReport::new(screen_name, deleted_count, undeleted_count);
+                let report = if client.is_none() {
+                    DeletedTweetReport::archived(screen_name, deleted_count, undeleted_count)
+                } else {
+                    DeletedTweetReport::new(screen_name, deleted_count, undeleted_count)
+                };
 
                 println!("{}", report);
 
@@ -646,6 +711,50 @@ async fn main() -> Result<(), Error> {
     }
 }
 
+fn install_pacing_stats_signal_handler(stats: Arc<cancel_culture::wbm::pacer::AdaptiveStats>) {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, Signal, SignalKind};
+
+        tokio::spawn(async move {
+            let mut usr1 = match signal(SignalKind::user_defined1()) {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+
+            #[cfg(target_os = "macos")]
+            let mut siginfo: Option<Signal> = match signal(SignalKind::info()) {
+                Ok(s) => Some(s),
+                Err(_) => None,
+            };
+
+            loop {
+                #[cfg(target_os = "macos")]
+                tokio::select! {
+                    _ = usr1.recv() => {
+                        eprintln!("{}", stats.format());
+                    }
+                    _ = async {
+                        if let Some(s) = siginfo.as_mut() {
+                            s.recv().await;
+                        } else {
+                            std::future::pending::<()>().await;
+                        }
+                    } => {
+                        eprintln!("{}", stats.format());
+                    }
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    usr1.recv().await;
+                    eprintln!("{}", stats.format());
+                }
+            }
+        });
+    }
+}
+
 fn print_user_report(users: &[TwitterUser]) {
     for user in users {
         println!("{} {} {}", user.id, user.screen_name, user.followers_count);
@@ -665,6 +774,9 @@ struct Opts {
     /// Level of verbosity
     #[clap(short, long, global = true, action = clap::ArgAction::Count)]
     verbose: u8,
+    /// Wayback pacing profile (controls token-bucket pacing for CDX and content requests)
+    #[clap(long, value_enum, default_value_t = cancel_culture::wbm::pacer::WaybackPacingProfile::Default)]
+    wayback_pacing: cancel_culture::wbm::pacer::WaybackPacingProfile,
     #[clap(subcommand)]
     command: SubCommand,
 }
@@ -696,6 +808,9 @@ enum SubCommand {
         /// Optional JSON file path for CDX results (useful for large accounts)
         #[clap(short = 'c', long)]
         cdx: Option<String>,
+        /// Do not use API to check availability
+        #[clap(long)]
+        no_api: bool,
         screen_name: String,
     },
     /// Print a list of all users who follow you (or someone else)

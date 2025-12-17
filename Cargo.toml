@@ -17,7 +17,7 @@ data-encoding = "2.3"
 displaydoc = "0.2"
 egg-mode = "0.16"
 egg-mode-extras = "0.3"
-fantoccini = { version = "0.19", features = [ "rustls-tls" ] }
+fantoccini = { version = "0.21", features = [ "rustls-tls" ] }
 file_diff = "1.0"
 flate2 = "1.0"
 fs_extra = "1.2"
@@ -47,12 +47,13 @@ tempfile = "3.2"
 thiserror = "1.0"
 time = "0.3"
 tinytemplate = "1.0"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "signal"] }
 tokio-test = "0.4"
 toml = "0.6"
 tryhard = "0.5"
 url = "2.2"
-wayback-rs = "0.5.1"
+leaky-bucket = "1.1.2"
+wayback-rs = { git = "https://github.com/chad-loder/wayback-rs", tag = "fork/wayback-rs/v0.6.0-chad.4" }
 
 [features]
 bundled-sqlite3 = ["libsqlite3-sys/bundled"]
