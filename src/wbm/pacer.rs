@@ -1,6 +1,6 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::time::Instant;
 
@@ -84,11 +84,15 @@ struct AdaptiveConfig {
 
 impl AdaptiveConfig {
     fn env_u64(var: &str) -> Option<u64> {
-        std::env::var(var).ok().and_then(|s| s.trim().parse::<u64>().ok())
+        std::env::var(var)
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
     }
 
     fn env_u32(var: &str) -> Option<u32> {
-        std::env::var(var).ok().and_then(|s| s.trim().parse::<u32>().ok())
+        std::env::var(var)
+            .ok()
+            .and_then(|s| s.trim().parse::<u32>().ok())
     }
 
     fn apply_env_overrides(&mut self) {
@@ -414,7 +418,10 @@ impl SurfaceState {
         }
 
         // Additive recovery: reduce interval in small steps.
-        self.interval = self.interval.saturating_sub(cfg.success_step).max(self.min_interval);
+        self.interval = self
+            .interval
+            .saturating_sub(cfg.success_step)
+            .max(self.min_interval);
     }
 
     fn on_backpressure(&mut self, cfg: AdaptiveConfig, cooldown: Duration) {
@@ -437,8 +444,12 @@ impl SurfaceState {
             scaled.min(cap)
         }
 
-        let effective_cooldown =
-            scaled_cooldown(cooldown, cfg.cooldown_growth, self.penalty_level, cfg.max_cooldown);
+        let effective_cooldown = scaled_cooldown(
+            cooldown,
+            cfg.cooldown_growth,
+            self.penalty_level,
+            cfg.max_cooldown,
+        );
         self.cooldown_until = now + effective_cooldown;
         // After congestion/backpressure, re-enter slow start so we recover quickly
         // up to the configured threshold, then switch to additive recovery.
@@ -475,7 +486,11 @@ struct AdaptiveControllerInner {
 
 impl AdaptiveControllerInner {
     fn new(cfg: AdaptiveConfig) -> Arc<Self> {
-        let cdx = SurfaceState::new(cfg.cdx_min_interval, cfg.cdx_initial_interval, cfg.cdx_max_interval);
+        let cdx = SurfaceState::new(
+            cfg.cdx_min_interval,
+            cfg.cdx_initial_interval,
+            cfg.cdx_max_interval,
+        );
         let content = SurfaceState::new(
             cfg.content_min_interval,
             cfg.content_initial_interval,
@@ -518,8 +533,7 @@ impl AdaptiveControllerInner {
     fn apply_event(&self, event: &wayback_rs::Event) {
         use wayback_rs::{ErrorClass, Phase, Surface};
 
-        let is_success = matches!(event.phase, Phase::Complete)
-            && event.status == Some(200);
+        let is_success = matches!(event.phase, Phase::Complete) && event.status == Some(200);
 
         let state = match event.surface {
             Surface::Cdx => &self.cdx,
@@ -551,7 +565,9 @@ impl AdaptiveControllerInner {
             Some(s) if s >= 500 => self.cfg.cooldown_on_5xx,
             Some(_) => self.cfg.cooldown_on_other,
             None => match event.error {
-                Some(ErrorClass::Timeout) | Some(ErrorClass::Connect) => self.cfg.cooldown_on_timeout,
+                Some(ErrorClass::Timeout) | Some(ErrorClass::Connect) => {
+                    self.cfg.cooldown_on_timeout
+                }
                 Some(ErrorClass::Decode) => self.cfg.cooldown_on_decode,
                 Some(ErrorClass::Blocked) => self.cfg.cooldown_on_429,
                 _ => self.cfg.cooldown_on_other,
@@ -570,7 +586,10 @@ impl AdaptiveControllerInner {
         if matches!(event.error, Some(ErrorClass::Decode)) {
             self.errors_decode.fetch_add(1, Ordering::Relaxed);
         }
-        if matches!(event.error, Some(ErrorClass::Timeout) | Some(ErrorClass::Connect)) {
+        if matches!(
+            event.error,
+            Some(ErrorClass::Timeout) | Some(ErrorClass::Connect)
+        ) {
             self.errors_timeout.fetch_add(1, Ordering::Relaxed);
         }
         if matches!(event.error, Some(ErrorClass::Blocked)) {
@@ -580,7 +599,6 @@ impl AdaptiveControllerInner {
         if let Ok(mut st) = state.lock() {
             st.on_backpressure(self.cfg, cooldown);
         }
-
     }
 
     fn snapshot(&self) -> AdaptiveSnapshot {
@@ -591,9 +609,7 @@ impl AdaptiveControllerInner {
                     interval: st.interval,
                     min_interval: st.min_interval,
                     max_interval: st.max_interval,
-                    cooldown_remaining: st
-                        .cooldown_until
-                        .saturating_duration_since(now),
+                    cooldown_remaining: st.cooldown_until.saturating_duration_since(now),
                     slow_start: st.in_slow_start,
                 }
             } else {
@@ -638,8 +654,12 @@ pub fn adaptive_wayback_pacer() -> AdaptiveWayback {
 
 fn adaptive_wayback_pacer_with_cfg(cfg: AdaptiveConfig) -> AdaptiveWayback {
     let inner = AdaptiveControllerInner::new(cfg);
-    let observer: Arc<dyn wayback_rs::Observer> = Arc::new(AdaptiveObserver { inner: inner.clone() });
-    let stats = AdaptiveStats { inner: inner.clone() };
+    let observer: Arc<dyn wayback_rs::Observer> = Arc::new(AdaptiveObserver {
+        inner: inner.clone(),
+    });
+    let stats = AdaptiveStats {
+        inner: inner.clone(),
+    };
 
     let pacer = Arc::new(wayback_rs::Pacer::new(
         {
@@ -658,7 +678,9 @@ fn adaptive_wayback_pacer_with_cfg(cfg: AdaptiveConfig) -> AdaptiveWayback {
         },
     ));
 
-    AdaptiveWayback { pacer, observer, stats }
+    AdaptiveWayback {
+        pacer,
+        observer,
+        stats,
+    }
 }
-
-

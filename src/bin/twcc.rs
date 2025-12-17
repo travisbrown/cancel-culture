@@ -426,7 +426,10 @@ async fn main() -> Result<(), Error> {
                 cancel_culture::wbm::pacer::WaybackPacingProfile::Adaptive => {
                     (adaptive.pacer, Some(adaptive.observer))
                 }
-                _ => (cancel_culture::wbm::pacer::wayback_pacer(opts.wayback_pacing), None),
+                _ => (
+                    cancel_culture::wbm::pacer::wayback_pacer(opts.wayback_pacing),
+                    None,
+                ),
             };
 
             if matches!(
@@ -436,7 +439,8 @@ async fn main() -> Result<(), Error> {
                 install_pacing_stats_signal_handler(Arc::new(adaptive.stats));
             }
 
-            let mut index_client = wayback_rs::cdx::IndexClient::default().with_pacer(pacer.clone());
+            let mut index_client =
+                wayback_rs::cdx::IndexClient::default().with_pacer(pacer.clone());
             let mut downloader = wayback_rs::Downloader::default().with_pacer(pacer);
 
             if let Some(observer) = observer {
