@@ -1,29 +1,20 @@
+name: rust-coverage
 on: [push]
 
-name: coverage
-
 jobs:
-  check:
-    name: Coverage
+  test:
+    name: coverage
     runs-on: ubuntu-latest
+    container:
+      image: xd009642/tarpaulin:develop-nightly
+      options: --security-opt seccomp=unconfined
     steps:
-      - name: Checkout repository
+      - name: check out repository
         uses: actions/checkout@v2
 
-      #- name: Set up ChromeDriver
-      #  uses: nanasess/setup-chromedriver@master
+      - name: generate code coverage
+        run: |
+          cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Run cargo-tarpaulin
-        uses: actions-rs/tarpaulin@v0.1
-        with:
-          version: '0.16.0'
-          args: '-- --test-threads 1'
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v1.1.0
+      - name: upload to codecov.io
+        uses: codecov/codecov-action@v2
