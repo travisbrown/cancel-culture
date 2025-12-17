@@ -4,6 +4,9 @@ This fork tracks `travisbrown/cancel-culture`.
 
 ## Unreleased
 
+### Added
+- `twcc deleted-tweets --no-api` to allow running without Twitter API credentials (skips API availability checks).
+
 ## fork/cancel-culture/v0.1.0-chad.2 (based on upstream `main` @ 88f8fef)
 
 ### Added
