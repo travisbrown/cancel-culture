@@ -11,8 +11,17 @@ const PAGE_SIZE: usize = 150000;
 async fn main() -> Result<(), Error> {
     let opts: Opts = Opts::parse();
     let _ = cancel_culture::cli::init_logging(opts.verbose)?;
-    let pacer = cancel_culture::wbm::pacer::default_wayback_pacer();
-    let client = IndexClient::default().with_pacer(pacer);
+    let adaptive = cancel_culture::wbm::pacer::adaptive_wayback_pacer();
+    let (pacer, observer) = match opts.wayback_pacing {
+        cancel_culture::wbm::pacer::WaybackPacingProfile::Adaptive => {
+            (adaptive.pacer, Some(adaptive.observer))
+        }
+        _ => (cancel_culture::wbm::pacer::wayback_pacer(opts.wayback_pacing), None),
+    };
+    let mut client = IndexClient::default().with_pacer(pacer);
+    if let Some(observer) = observer {
+        client = client.with_observer(observer);
+    }
 
     let output_path = opts
         .output
@@ -54,6 +63,9 @@ struct Opts {
     /// Level of verbosity
     #[clap(short, long, global = true, action = clap::ArgAction::Count)]
     verbose: u8,
+    /// Wayback pacing profile (controls token-bucket pacing for CDX and content requests)
+    #[clap(long, value_enum, default_value_t = cancel_culture::wbm::pacer::WaybackPacingProfile::Default)]
+    wayback_pacing: cancel_culture::wbm::pacer::WaybackPacingProfile,
     /// Query URL
     #[clap(short, long)]
     query: String,

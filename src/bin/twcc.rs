@@ -404,9 +404,21 @@ async fn main() -> Result<(), Error> {
             ref cdx,
             ref screen_name,
         } => {
-            let pacer = cancel_culture::wbm::pacer::default_wayback_pacer();
-            let index_client = wayback_rs::cdx::IndexClient::default().with_pacer(pacer.clone());
-            let downloader = wayback_rs::Downloader::default().with_pacer(pacer);
+            let adaptive = cancel_culture::wbm::pacer::adaptive_wayback_pacer();
+            let (pacer, observer) = match opts.wayback_pacing {
+                cancel_culture::wbm::pacer::WaybackPacingProfile::Adaptive => {
+                    (adaptive.pacer, Some(adaptive.observer))
+                }
+                _ => (cancel_culture::wbm::pacer::wayback_pacer(opts.wayback_pacing), None),
+            };
+
+            let mut index_client = wayback_rs::cdx::IndexClient::default().with_pacer(pacer.clone());
+            let mut downloader = wayback_rs::Downloader::default().with_pacer(pacer);
+
+            if let Some(observer) = observer {
+                index_client = index_client.with_observer(observer.clone());
+                downloader = downloader.with_observer(observer);
+            }
             let mut items = match cdx {
                 Some(cdx_path) => {
                     let cdx_file = File::open(cdx_path).map_err(Error::CdxJson)?;
@@ -666,6 +678,9 @@ struct Opts {
     /// Level of verbosity
     #[clap(short, long, global = true, action = clap::ArgAction::Count)]
     verbose: u8,
+    /// Wayback pacing profile (controls token-bucket pacing for CDX and content requests)
+    #[clap(long, value_enum, default_value_t = cancel_culture::wbm::pacer::WaybackPacingProfile::Default)]
+    wayback_pacing: cancel_culture::wbm::pacer::WaybackPacingProfile,
     #[clap(subcommand)]
     command: SubCommand,
 }
