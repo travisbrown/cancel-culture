@@ -584,6 +584,13 @@ impl AdaptiveControllerInner {
         // - 5xx: medium cooldown
         // - decode/non-JSON: medium cooldown (often signals edge errors)
         // - timeouts/connect: shorter cooldown
+        // Not all HTTP errors are "backpressure". In particular, a 404 on the Content surface
+        // usually just means "this snapshot isn't available", and adapting the global rate would
+        // slow down runs on accounts with lots of missing/removed captures.
+        if matches!(event.surface, Surface::Content) && event.status == Some(404) {
+            return;
+        }
+
         let cooldown = match event.status {
             Some(429) => self.cfg.cooldown_on_429,
             Some(s) if s >= 500 => self.cfg.cooldown_on_5xx,
