@@ -16,8 +16,8 @@ csv="1.1"
 data-encoding = "2.3"
 displaydoc = "0.2"
 egg-mode = "0.16"
-egg-mode-extras = "0.3"
-fantoccini = { version = "0.21", features = [ "rustls-tls" ] }
+egg-mode-extras = "0.4"
+fantoccini = { version = "0.22", features = [ "rustls-tls" ] }
 file_diff = "1.0"
 flate2 = "1.0"
 fs_extra = "1.2"
@@ -28,14 +28,14 @@ html5ever = "0.26"
 hyper = { version = "0.14", features = [ "stream" ] }
 hyper-tls = "0.5"
 image = "0.24"
-itertools = "0.10"
+itertools = "0.14"
 lazy_static = "1.4"
-libsqlite3-sys = "0.25"
+libsqlite3-sys = "0.35"
 log = "0.4"
 pin-project = "1.0"
 regex = "1.4"
 reqwest = { version = "0.11", features = ["gzip", "json"] }
-rusqlite = "0.28"
+rusqlite = "0.37"
 scraper = "0.14"
 serde = "1.0"
 serde_derive = "1.0"
@@ -44,16 +44,16 @@ sha-1 = "0.10"
 simplelog = "0.12"
 tar = "0.4"
 tempfile = "3.2"
-thiserror = "1.0"
+thiserror = "2"
 time = "0.3"
 tinytemplate = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "signal"] }
 tokio-test = "0.4"
-toml = "0.6"
+toml = "0.9"
 tryhard = "0.5"
 url = "2.2"
 leaky-bucket = "1.1.2"
-wayback-rs = { git = "https://github.com/chad-loder/wayback-rs", tag = "fork/wayback-rs/v0.6.0-chad.4" }
+wayback-rs = "0.7"
 
 [features]
 bundled-sqlite3 = ["libsqlite3-sys/bundled"]
