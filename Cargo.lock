@@ -3638,8 +3638,8 @@ checksum = "1c38c045535d93ec4f0b4defec448e4291638ee608530863b1e2ba115d4fff7f"
 
 [[package]]
 name = "wayback-rs"
-version = "0.6.0"
-source = "git+https://github.com/chad-loder/wayback-rs?tag=fork%2Fwayback-rs%2Fv0.6.0-chad.2#f1644453ee9b1e5b2fa6a403b8061bf1b6f56ce9"
+version = "0.6.0-chad.3"
+source = "git+https://github.com/chad-loder/wayback-rs?tag=fork%2Fwayback-rs%2Fv0.6.0-chad.4#e2f74168fcb15ac24b37504e185f97e05920ed69"
 dependencies = [
  "async-std",
  "bytes",
