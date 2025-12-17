@@ -53,7 +53,7 @@ toml = "0.6"
 tryhard = "0.5"
 url = "2.2"
 leaky-bucket = "1.1.2"
-wayback-rs = { path = "../wayback-rs" }
+wayback-rs = { git = "https://github.com/chad-loder/wayback-rs", tag = "fork/wayback-rs/v0.6.0-chad.2" }
 
 [features]
 bundled-sqlite3 = ["libsqlite3-sys/bundled"]
