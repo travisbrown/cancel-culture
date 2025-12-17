@@ -17,7 +17,10 @@ async fn main() -> Result<(), Error> {
         cancel_culture::wbm::pacer::WaybackPacingProfile::Adaptive => {
             (adaptive.pacer, Some(adaptive.observer))
         }
-        _ => (cancel_culture::wbm::pacer::wayback_pacer(opts.wayback_pacing), None),
+        _ => (
+            cancel_culture::wbm::pacer::wayback_pacer(opts.wayback_pacing),
+            None,
+        ),
     };
     let mut client = IndexClient::default().with_pacer(pacer);
     if let Some(observer) = observer {
