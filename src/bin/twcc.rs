@@ -12,6 +12,7 @@ use std::io::Read;
 use std::sync::Arc;
 
 const CDX_PAGE_LIMIT: usize = 150000;
+const DEFAULT_CONTENT_CONCURRENCY: usize = 4;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -415,6 +416,7 @@ async fn main() -> Result<(), Error> {
             ref cdx,
             ref screen_name,
             no_api,
+            content_concurrency,
         } => {
             let client = if no_api {
                 None
@@ -447,6 +449,7 @@ async fn main() -> Result<(), Error> {
                 index_client = index_client.with_observer(observer.clone());
                 downloader = downloader.with_observer(observer);
             }
+            let downloader = Arc::new(downloader);
             let mut items = match cdx {
                 Some(cdx_path) => {
                     let cdx_file = File::open(cdx_path).map_err(Error::CdxJson)?;
@@ -543,91 +546,170 @@ async fn main() -> Result<(), Error> {
                 }
 
                 log::info!("Saving {} items to store", items.len());
-                s.save_all(&downloader, &items, true, 4).await?;
+                s.save_all(downloader.as_ref(), &items, true, content_concurrency)
+                    .await?;
             }
 
             let mut empty_items = vec![];
 
-            for (id, _) in deleted {
-                if let Some(item) = by_id.get(&id) {
-                    if report {
-                        if let Some(content) = match store {
-                            Some(ref store) => match store.read(&item.digest) {
-                                Ok(content) => content,
-                                Err(error) => {
-                                    log::error!(
-                                        "Invalid UTF-8 bytes in item with digest {} and URL {}",
-                                        item.digest,
-                                        item.url
-                                    );
-                                    None
-                                }
-                            },
-                            None => {
-                                log::info!("Downloading {}", item.url);
-                                match downloader.download_item(item).await {
-                                    Ok(bytes) => Some(match String::from_utf8_lossy(&bytes) {
-                                        Cow::Borrowed(value) => value.to_string(),
-                                        Cow::Owned(value_with_replacements) => {
-                                            log::error!(
+            // In report mode, we can overlap Wayback content requests using bounded concurrency.
+            // Output order remains stable because we gather results, then sort before printing.
+            if report && store.is_none() {
+                let screen_name_lc = screen_name.to_lowercase();
+                let tasks = deleted
+                    .into_iter()
+                    .filter_map(|(id, _)| by_id.get(&id).cloned())
+                    .map(|item| {
+                        let downloader = downloader.clone();
+                        async move {
+                            log::info!("Downloading {}", item.url);
+                            let content = match downloader.download_item(&item).await {
+                                Ok(bytes) => Some(match String::from_utf8_lossy(&bytes) {
+                                    Cow::Borrowed(value) => value.to_string(),
+                                    Cow::Owned(value_with_replacements) => {
+                                        log::error!(
                                             "Invalid UTF-8 bytes in item with digest {} and URL {}",
                                             item.digest,
                                             item.url
                                         );
-                                            value_with_replacements
-                                        }
-                                    }),
-                                    Err(_) => {
-                                        log::warn!("Unable to download {}", item.url);
-                                        None
+                                        value_with_replacements
                                     }
+                                }),
+                                Err(_) => {
+                                    log::warn!("Unable to download {}", item.url);
+                                    None
                                 }
+                            };
+                            (item, content)
+                        }
+                    });
+
+                let fetched = futures::stream::iter(tasks)
+                    .buffer_unordered(content_concurrency)
+                    .collect::<Vec<_>>()
+                    .await;
+
+                for (item, content) in fetched {
+                    if let Some(content) = content {
+                        let html = scraper::Html::parse_document(&content);
+
+                        let mut tweets =
+                            cancel_culture::browser::twitter::parser::extract_tweets(&html);
+
+                        if tweets.is_empty() {
+                            if let Some(tweet) =
+                                cancel_culture::browser::twitter::parser::extract_tweet_json(
+                                    &content,
+                                )
+                            {
+                                tweets.push(tweet);
                             }
-                        } {
-                            let html = scraper::Html::parse_document(&content);
+                        }
 
-                            let mut tweets =
-                                cancel_culture::browser::twitter::parser::extract_tweets(&html);
+                        if tweets.is_empty() {
+                            empty_items.push(item.clone());
+                            log::warn!("Unable to find tweets for {}", item.url);
+                        }
 
-                            if tweets.is_empty() {
-                                if let Some(tweet) =
-                                    cancel_culture::browser::twitter::parser::extract_tweet_json(
-                                        &content,
-                                    )
-                                {
-                                    tweets.push(tweet);
-                                }
-                            }
-
-                            if tweets.is_empty() {
-                                empty_items.push(item);
-                                log::warn!("Unable to find tweets for {}", item.url);
-                            }
-
-                            for tweet in tweets {
-                                if tweet.user_screen_name.to_lowercase()
-                                    == *screen_name.to_lowercase()
-                                {
-                                    match report_items.get(&tweet.id) {
-                                        Some((saved_tweet, _)) => {
-                                            if saved_tweet.text.len() < tweet.text.len() {
-                                                report_items
-                                                    .insert(tweet.id, (tweet, item.clone()));
-                                            }
-                                        }
-                                        None => {
+                        for tweet in tweets {
+                            if tweet.user_screen_name.to_lowercase() == screen_name_lc {
+                                match report_items.get(&tweet.id) {
+                                    Some((saved_tweet, _)) => {
+                                        if saved_tweet.text.len() < tweet.text.len() {
                                             report_items.insert(tweet.id, (tweet, item.clone()));
                                         }
+                                    }
+                                    None => {
+                                        report_items.insert(tweet.id, (tweet, item.clone()));
                                     }
                                 }
                             }
                         }
-                    } else {
-                        println!(
-                            "https://web.archive.org/web/{}/{}",
-                            item.timestamp(),
-                            item.url
-                        );
+                    }
+                }
+            } else {
+                for (id, _) in deleted {
+                    if let Some(item) = by_id.get(&id) {
+                        if report {
+                            if let Some(content) = match store {
+                                Some(ref store) => match store.read(&item.digest) {
+                                    Ok(content) => content,
+                                    Err(_error) => {
+                                        log::error!(
+                                            "Invalid UTF-8 bytes in item with digest {} and URL {}",
+                                            item.digest,
+                                            item.url
+                                        );
+                                        None
+                                    }
+                                },
+                                None => {
+                                    log::info!("Downloading {}", item.url);
+                                    match downloader.download_item(item).await {
+                                        Ok(bytes) => Some(match String::from_utf8_lossy(&bytes) {
+                                            Cow::Borrowed(value) => value.to_string(),
+                                            Cow::Owned(value_with_replacements) => {
+                                                log::error!(
+                                                    "Invalid UTF-8 bytes in item with digest {} and URL {}",
+                                                    item.digest,
+                                                    item.url
+                                                );
+                                                value_with_replacements
+                                            }
+                                        }),
+                                        Err(_) => {
+                                            log::warn!("Unable to download {}", item.url);
+                                            None
+                                        }
+                                    }
+                                }
+                            } {
+                                let html = scraper::Html::parse_document(&content);
+
+                                let mut tweets =
+                                    cancel_culture::browser::twitter::parser::extract_tweets(&html);
+
+                                if tweets.is_empty() {
+                                    if let Some(tweet) =
+                                        cancel_culture::browser::twitter::parser::extract_tweet_json(
+                                            &content,
+                                        )
+                                    {
+                                        tweets.push(tweet);
+                                    }
+                                }
+
+                                if tweets.is_empty() {
+                                    empty_items.push(item.clone());
+                                    log::warn!("Unable to find tweets for {}", item.url);
+                                }
+
+                                for tweet in tweets {
+                                    if tweet.user_screen_name.to_lowercase()
+                                        == *screen_name.to_lowercase()
+                                    {
+                                        match report_items.get(&tweet.id) {
+                                            Some((saved_tweet, _)) => {
+                                                if saved_tweet.text.len() < tweet.text.len() {
+                                                    report_items
+                                                        .insert(tweet.id, (tweet, item.clone()));
+                                                }
+                                            }
+                                            None => {
+                                                report_items
+                                                    .insert(tweet.id, (tweet, item.clone()));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            println!(
+                                "https://web.archive.org/web/{}/{}",
+                                item.timestamp(),
+                                item.url
+                            );
+                        }
                     }
                 }
             }
@@ -778,7 +860,7 @@ struct Opts {
     /// Level of verbosity
     #[clap(short, long, global = true, action = clap::ArgAction::Count)]
     verbose: u8,
-    /// Wayback pacing profile (controls token-bucket pacing for CDX and content requests)
+    /// Wayback pacing profile (controls how fast we query/download from the Wayback Machine)
     #[clap(long, value_enum, default_value_t = cancel_culture::wbm::pacer::WaybackPacingProfile::Default)]
     wayback_pacing: cancel_culture::wbm::pacer::WaybackPacingProfile,
     #[clap(subcommand)]
@@ -815,6 +897,9 @@ enum SubCommand {
         /// Do not use API to check availability
         #[clap(long)]
         no_api: bool,
+        /// Max in-flight Wayback content requests (report mode and store downloads)
+        #[clap(long, default_value_t = DEFAULT_CONTENT_CONCURRENCY)]
+        content_concurrency: usize,
         screen_name: String,
     },
     /// Print a list of all users who follow you (or someone else)

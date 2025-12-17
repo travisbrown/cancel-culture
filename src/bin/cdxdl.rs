@@ -118,7 +118,7 @@ struct Opts {
     /// Level of verbosity
     #[clap(short, long, global = true, action = clap::ArgAction::Count)]
     verbose: u8,
-    /// Wayback pacing profile (controls token-bucket pacing for CDX and content requests)
+    /// Wayback pacing profile (controls how fast we query/download from the Wayback Machine)
     #[clap(long, value_enum, default_value_t = cancel_culture::wbm::pacer::WaybackPacingProfile::Default)]
     wayback_pacing: cancel_culture::wbm::pacer::WaybackPacingProfile,
     /// Query URL

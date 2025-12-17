@@ -92,32 +92,56 @@ URL of a deleted tweet from the URL of a reply, and it can partition a list of t
 deleted status.
 
 ```
-twcc 0.1.0
-Travis Brown <travisrobertbrown@gmail.com>
+$ target/debug/twcc --help
+Usage: twcc [OPTIONS] <COMMAND>
 
-USAGE:
-    twcc [FLAGS] [OPTIONS] <SUBCOMMAND>
+Commands:
+  blocked-follows   For a given user, list everyone they follow who you block
+  follower-report   For a given user, print a report about their followers
+  lookup-reply      Get the URL of a tweet given the URL or status ID of a reply
+  check-existence   Check whether a list of status IDs (from stdin) still exist
+  deleted-tweets    List Wayback Machine URLs for all deleted tweets by a user
+  list-followers    Print a list of all users who follow you (or someone else)
+  list-friends      Print a list of all users you (or someone else) follows
+  list-blocks       Print a list of all users you've blocked
+  list-tweets       Print a list of (up to approximately 3200) tweet IDs for a user
+  list-tweets-json
+  lookup-tweets     Read tweet IDs from stdin and print info
+  import-blocks     Block a list of user IDs (from stdin)
+  list-unmutuals    List everyone you follow or who follows you who is not a mutual
+  help              Print this message or the help of the given subcommand(s)
 
-FLAGS:
-    -h, --help       Prints help information
-    -v, --verbose    Level of verbosity
-    -V, --version    Prints version information
+Options:
+  -k, --key-file <KEY_FILE>
+          TOML file containing Twitter API keys
 
-OPTIONS:
-    -k, --key-file <key-file>    TOML file containing Twitter API keys [default: keys.toml]
+          [default: keys.toml]
 
-SUBCOMMANDS:
-    blocked-follows    For a given user, list everyone they follow who you block
-    check-existence    Checks whether a list of status IDs (from stdin) still exist
-    deleted-tweets     Lists Wayback Machine URLs for all deleted tweets by a user
-    follower-report    For a given user, print a report about their followers
-    help               Prints this message or the help of the given subcommand(s)
-    import-blocks      Blocks a list of user IDs (from stdin)
-    list-blocks        Print a list of all users you've blocked
-    list-followers     Print a list of all users who follow you (or someone else)
-    list-friends       Print a list of all users you (or someone else) follows
-    list-tweets        Print a list of (up to approximately 3200) tweet IDs for a user
-    lookup-reply       Get the URL of a tweet given the URL or status ID of a reply
+  -v, --verbose...
+          Level of verbosity
+
+      --wayback-pacing <WAYBACK_PACING>
+          Wayback pacing profile (controls how fast we query/download from the Wayback Machine)
+
+          Possible values:
+          - conservative: Conservative pacing intended to minimize the risk of Wayback CDX throttling
+          - default:      Default pacing (balanced)
+          - adaptive:     Adaptive pacing with hysteresis (slow recovery, fast backoff)
+
+          [default: default]
+```
+
+In `deleted-tweets` mode, you can also run without Twitter API checks:
+
+```
+$ target/release/twcc deleted-tweets --no-api --report <screen-name>
+```
+
+By default, report generation overlaps a small number of Wayback downloads to reduce the impact of
+network latency. You can adjust how many downloads are in flight with `--content-concurrency`:
+
+```
+$ target/release/twcc deleted-tweets --report --content-concurrency 4 <screen-name>
 ```
 
 ## Tweet screenshots
@@ -155,9 +179,9 @@ You'll need to [install Rust and Cargo](https://doc.rust-lang.org/cargo/getting-
 Once you've got those, you can run `cargo build --release` and the binaries will be available in the
 `target/release` directory.
 
-For the main `twcc` application, you'll need
-[Twitter API access](https://developer.twitter.com/en/apply-for-access)
-for your Twitter account, and you'll need to provide the necessary keys in a file (by default
+For the main `twcc` application, some commands use the Twitter API and require
+[Twitter API access](https://developer.twitter.com/en/apply-for-access) plus a keys file (by
+default
 `keys.toml`):
 
 ```toml
@@ -189,9 +213,9 @@ Most of these things are excluded for one of the following reasons:
 
 I might add some of them eventually.
 
-Nothing here is very polished or robust. These applications don't keep track of rate limits in all
-cases, for example, so if you run out of requests for an endpoint, they may just crash, and you'll
-have to wait. I might try to smooth out some of these rough edges at some point, but it's unlikely.
+Nothing here is very polished or robust. Some commands may still run into rate limits or transient
+failures and require waiting/retrying. I might try to smooth out some of these rough edges at some
+point, but it's unlikely.
 
 ## License
 

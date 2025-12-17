@@ -137,12 +137,17 @@ impl AdaptiveConfig {
             backoff_factor: 2,
 
             // CDX is the most fragile surface (documented limits and escalating penalties).
+            // Keep a relatively slow minimum interval (1200ms) to reduce the risk of
+            // triggering long penalty buckets in hostile environments.
             cdx_min_interval: Duration::from_millis(1200),
             cdx_initial_interval: Duration::from_millis(1500),
             cdx_max_interval: Duration::from_secs(30),
 
             // Content is separate; still conservative by default.
-            content_min_interval: Duration::from_millis(800),
+            // Content can usually tolerate a bit more throughput, but pushing the per-request
+            // spacing too low tends to surface timeouts (especially once we enable bounded
+            // concurrency in report mode). Use a moderate floor of 600ms as a balance.
+            content_min_interval: Duration::from_millis(600),
             content_initial_interval: Duration::from_millis(1500),
             content_max_interval: Duration::from_secs(20),
 
@@ -535,16 +540,35 @@ impl AdaptiveControllerInner {
 
         let is_success = matches!(event.phase, Phase::Complete) && event.status == Some(200);
 
-        let state = match event.surface {
-            Surface::Cdx => &self.cdx,
-            Surface::Content => &self.content,
+        let (surface_name, state) = match event.surface {
+            Surface::Cdx => ("CDX", &self.cdx),
+            Surface::Content => ("Content", &self.content),
             _ => return,
         };
 
         if is_success {
             self.success.fetch_add(1, Ordering::Relaxed);
             if let Ok(mut st) = state.lock() {
+                let was_slow_start = st.in_slow_start;
+                let was_interval = st.interval;
                 st.on_success(self.cfg);
+
+                // Low-noise adaptation logs at INFO:
+                // - exiting slow start (a meaningful phase transition)
+                // - reaching the configured min interval (we're "at the floor")
+                if was_slow_start && !st.in_slow_start {
+                    log::info!(
+                        "Wayback pacing {surface_name}: exited slow start (interval={}ms, min={}ms)",
+                        st.interval.as_millis(),
+                        st.min_interval.as_millis()
+                    );
+                }
+                if was_interval > st.min_interval && st.interval == st.min_interval {
+                    log::info!(
+                        "Wayback pacing {surface_name}: reached min interval floor ({}ms)",
+                        st.interval.as_millis()
+                    );
+                }
             }
             return;
         }
@@ -560,6 +584,13 @@ impl AdaptiveControllerInner {
         // - 5xx: medium cooldown
         // - decode/non-JSON: medium cooldown (often signals edge errors)
         // - timeouts/connect: shorter cooldown
+        // Not all HTTP errors are "backpressure". In particular, a 404 on the Content surface
+        // usually just means "this snapshot isn't available", and adapting the global rate would
+        // slow down runs on accounts with lots of missing/removed captures.
+        if matches!(event.surface, Surface::Content) && event.status == Some(404) {
+            return;
+        }
+
         let cooldown = match event.status {
             Some(429) => self.cfg.cooldown_on_429,
             Some(s) if s >= 500 => self.cfg.cooldown_on_5xx,
@@ -597,7 +628,24 @@ impl AdaptiveControllerInner {
         }
 
         if let Ok(mut st) = state.lock() {
+            let old_interval = st.interval;
+            let old_penalty_level = st.penalty_level;
             st.on_backpressure(self.cfg, cooldown);
+
+            // Single concise INFO line per backpressure signal (no per-request spam).
+            log::info!(
+                "Wayback pacing {surface_name}: backpressure (status={:?} error={:?}) interval {}ms -> {}ms cooldown={}ms penalty {} -> {} slow_start={}",
+                event.status,
+                event.error,
+                old_interval.as_millis(),
+                st.interval.as_millis(),
+                st.cooldown_until
+                    .saturating_duration_since(Instant::now())
+                    .as_millis(),
+                old_penalty_level,
+                st.penalty_level,
+                st.in_slow_start
+            );
         }
     }
 
