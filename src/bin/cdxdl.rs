@@ -3,6 +3,7 @@ use clap::Parser;
 use futures::TryStreamExt;
 use futures_locks::Mutex;
 use std::fs::File;
+use std::sync::Arc;
 use wayback_rs::cdx::IndexClient;
 
 const PAGE_SIZE: usize = 150000;
@@ -21,6 +22,13 @@ async fn main() -> Result<(), Error> {
     let mut client = IndexClient::default().with_pacer(pacer);
     if let Some(observer) = observer {
         client = client.with_observer(observer);
+    }
+
+    if matches!(
+        opts.wayback_pacing,
+        cancel_culture::wbm::pacer::WaybackPacingProfile::Adaptive
+    ) {
+        install_pacing_stats_signal_handler(Arc::new(adaptive.stats));
     }
 
     let output_path = opts
@@ -43,6 +51,50 @@ async fn main() -> Result<(), Error> {
         .await?;
 
     Ok(())
+}
+
+fn install_pacing_stats_signal_handler(stats: Arc<cancel_culture::wbm::pacer::AdaptiveStats>) {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, Signal, SignalKind};
+
+        tokio::spawn(async move {
+            let mut usr1 = match signal(SignalKind::user_defined1()) {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+
+            #[cfg(target_os = "macos")]
+            let mut siginfo: Option<Signal> = match signal(SignalKind::info()) {
+                Ok(s) => Some(s),
+                Err(_) => None,
+            };
+
+            loop {
+                #[cfg(target_os = "macos")]
+                tokio::select! {
+                    _ = usr1.recv() => {
+                        eprintln!("{}", stats.format());
+                    }
+                    _ = async {
+                        if let Some(s) = siginfo.as_mut() {
+                            s.recv().await;
+                        } else {
+                            std::future::pending::<()>().await;
+                        }
+                    } => {
+                        eprintln!("{}", stats.format());
+                    }
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    usr1.recv().await;
+                    eprintln!("{}", stats.format());
+                }
+            }
+        });
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

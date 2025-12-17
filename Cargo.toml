@@ -47,7 +47,7 @@ tempfile = "3.2"
 thiserror = "1.0"
 time = "0.3"
 tinytemplate = "1.0"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "signal"] }
 tokio-test = "0.4"
 toml = "0.6"
 tryhard = "0.5"

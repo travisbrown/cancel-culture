@@ -9,6 +9,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
+use std::sync::Arc;
 
 const CDX_PAGE_LIMIT: usize = 150000;
 
@@ -412,6 +413,13 @@ async fn main() -> Result<(), Error> {
                 _ => (cancel_culture::wbm::pacer::wayback_pacer(opts.wayback_pacing), None),
             };
 
+            if matches!(
+                opts.wayback_pacing,
+                cancel_culture::wbm::pacer::WaybackPacingProfile::Adaptive
+            ) {
+                install_pacing_stats_signal_handler(Arc::new(adaptive.stats));
+            }
+
             let mut index_client = wayback_rs::cdx::IndexClient::default().with_pacer(pacer.clone());
             let mut downloader = wayback_rs::Downloader::default().with_pacer(pacer);
 
@@ -656,6 +664,50 @@ async fn main() -> Result<(), Error> {
 
             Ok(())
         }
+    }
+}
+
+fn install_pacing_stats_signal_handler(stats: Arc<cancel_culture::wbm::pacer::AdaptiveStats>) {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, Signal, SignalKind};
+
+        tokio::spawn(async move {
+            let mut usr1 = match signal(SignalKind::user_defined1()) {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+
+            #[cfg(target_os = "macos")]
+            let mut siginfo: Option<Signal> = match signal(SignalKind::info()) {
+                Ok(s) => Some(s),
+                Err(_) => None,
+            };
+
+            loop {
+                #[cfg(target_os = "macos")]
+                tokio::select! {
+                    _ = usr1.recv() => {
+                        eprintln!("{}", stats.format());
+                    }
+                    _ = async {
+                        if let Some(s) = siginfo.as_mut() {
+                            s.recv().await;
+                        } else {
+                            std::future::pending::<()>().await;
+                        }
+                    } => {
+                        eprintln!("{}", stats.format());
+                    }
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    usr1.recv().await;
+                    eprintln!("{}", stats.format());
+                }
+            }
+        });
     }
 }
 

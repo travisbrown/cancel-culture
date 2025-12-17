@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::time::Instant;
 
@@ -212,6 +213,73 @@ pub fn default_wayback_pacer() -> Arc<wayback_rs::Pacer> {
 pub struct AdaptiveWayback {
     pub pacer: Arc<wayback_rs::Pacer>,
     pub observer: Arc<dyn wayback_rs::Observer>,
+    pub stats: AdaptiveStats,
+}
+
+#[derive(Clone)]
+pub struct AdaptiveStats {
+    inner: Arc<AdaptiveControllerInner>,
+}
+
+impl AdaptiveStats {
+    pub fn snapshot(&self) -> AdaptiveSnapshot {
+        self.inner.snapshot()
+    }
+
+    pub fn format(&self) -> String {
+        self.snapshot().format()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SurfaceSnapshot {
+    pub interval: Duration,
+    pub min_interval: Duration,
+    pub max_interval: Duration,
+    pub cooldown_remaining: Duration,
+    pub slow_start: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct AdaptiveSnapshot {
+    pub cdx: SurfaceSnapshot,
+    pub content: SurfaceSnapshot,
+    pub success: u64,
+    pub errors: u64,
+    pub errors_429: u64,
+    pub errors_5xx: u64,
+    pub errors_decode: u64,
+    pub errors_timeout: u64,
+}
+
+impl AdaptiveSnapshot {
+    pub fn format(&self) -> String {
+        fn ms(d: Duration) -> u128 {
+            d.as_millis()
+        }
+        fn fmt_surface(name: &str, s: &SurfaceSnapshot) -> String {
+            format!(
+                "{name:7} interval={:>5}ms (min={:>5}ms max={:>5}ms) cooldown={:>5}ms slow_start={}",
+                ms(s.interval),
+                ms(s.min_interval),
+                ms(s.max_interval),
+                ms(s.cooldown_remaining),
+                s.slow_start
+            )
+        }
+
+        let mut out = String::new();
+        out.push_str("Wayback pacing stats (adaptive)\n");
+        out.push_str(&fmt_surface("CDX", &self.cdx));
+        out.push('\n');
+        out.push_str(&fmt_surface("Content", &self.content));
+        out.push('\n');
+        out.push_str(&format!(
+            "events: success={} errors={} (429={} 5xx={} decode={} timeout={})",
+            self.success, self.errors, self.errors_429, self.errors_5xx, self.errors_decode, self.errors_timeout
+        ));
+        out
+    }
 }
 
 #[derive(Debug)]
@@ -297,6 +365,12 @@ struct AdaptiveControllerInner {
     cfg: AdaptiveConfig,
     cdx: Mutex<SurfaceState>,
     content: Mutex<SurfaceState>,
+    success: AtomicU64,
+    errors: AtomicU64,
+    errors_429: AtomicU64,
+    errors_5xx: AtomicU64,
+    errors_decode: AtomicU64,
+    errors_timeout: AtomicU64,
 }
 
 impl AdaptiveControllerInner {
@@ -311,6 +385,12 @@ impl AdaptiveControllerInner {
             cfg,
             cdx: Mutex::new(cdx),
             content: Mutex::new(content),
+            success: AtomicU64::new(0),
+            errors: AtomicU64::new(0),
+            errors_429: AtomicU64::new(0),
+            errors_5xx: AtomicU64::new(0),
+            errors_decode: AtomicU64::new(0),
+            errors_timeout: AtomicU64::new(0),
         })
     }
 
@@ -347,6 +427,7 @@ impl AdaptiveControllerInner {
         };
 
         if is_success {
+            self.success.fetch_add(1, Ordering::Relaxed);
             if let Ok(mut st) = state.lock() {
                 st.on_success(self.cfg);
             }
@@ -356,6 +437,8 @@ impl AdaptiveControllerInner {
         if !matches!(event.phase, Phase::Error) {
             return;
         }
+
+        self.errors.fetch_add(1, Ordering::Relaxed);
 
         // Backpressure heuristics with hysteresis:
         // - 429: long cooldown (avoid escalating penalties)
@@ -373,10 +456,63 @@ impl AdaptiveControllerInner {
             },
         };
 
+        match event.status {
+            Some(429) => {
+                self.errors_429.fetch_add(1, Ordering::Relaxed);
+            }
+            Some(s) if s >= 500 => {
+                self.errors_5xx.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {}
+        }
+        if matches!(event.error, Some(ErrorClass::Decode)) {
+            self.errors_decode.fetch_add(1, Ordering::Relaxed);
+        }
+        if matches!(event.error, Some(ErrorClass::Timeout) | Some(ErrorClass::Connect)) {
+            self.errors_timeout.fetch_add(1, Ordering::Relaxed);
+        }
+
         if let Ok(mut st) = state.lock() {
             st.on_backpressure(self.cfg, cooldown);
         }
 
+    }
+
+    fn snapshot(&self) -> AdaptiveSnapshot {
+        fn snap_surface(m: &Mutex<SurfaceState>) -> SurfaceSnapshot {
+            let now = Instant::now();
+            if let Ok(st) = m.lock() {
+                SurfaceSnapshot {
+                    interval: st.interval,
+                    min_interval: st.min_interval,
+                    max_interval: st.max_interval,
+                    cooldown_remaining: st
+                        .cooldown_until
+                        .saturating_duration_since(now),
+                    slow_start: st.in_slow_start,
+                }
+            } else {
+                // If poisoned, return a safe empty snapshot.
+                SurfaceSnapshot {
+                    interval: Duration::from_secs(0),
+                    min_interval: Duration::from_secs(0),
+                    max_interval: Duration::from_secs(0),
+                    cooldown_remaining: Duration::from_secs(0),
+                    slow_start: false,
+                }
+            }
+        }
+
+        AdaptiveSnapshot {
+            cdx: snap_surface(&self.cdx),
+            content: snap_surface(&self.content),
+            success: self.success.load(Ordering::Relaxed),
+            errors: self.errors.load(Ordering::Relaxed),
+            errors_429: self.errors_429.load(Ordering::Relaxed),
+            errors_5xx: self.errors_5xx.load(Ordering::Relaxed),
+            errors_decode: self.errors_decode.load(Ordering::Relaxed),
+            errors_timeout: self.errors_timeout.load(Ordering::Relaxed),
+        }
     }
 }
 
@@ -394,9 +530,10 @@ pub fn adaptive_wayback_pacer() -> AdaptiveWayback {
     adaptive_wayback_pacer_with_cfg(AdaptiveConfig::default())
 }
 
-pub fn adaptive_wayback_pacer_with_cfg(cfg: AdaptiveConfig) -> AdaptiveWayback {
+fn adaptive_wayback_pacer_with_cfg(cfg: AdaptiveConfig) -> AdaptiveWayback {
     let inner = AdaptiveControllerInner::new(cfg);
     let observer: Arc<dyn wayback_rs::Observer> = Arc::new(AdaptiveObserver { inner: inner.clone() });
+    let stats = AdaptiveStats { inner: inner.clone() };
 
     let pacer = Arc::new(wayback_rs::Pacer::new(
         {
@@ -415,7 +552,7 @@ pub fn adaptive_wayback_pacer_with_cfg(cfg: AdaptiveConfig) -> AdaptiveWayback {
         },
     ));
 
-    AdaptiveWayback { pacer, observer }
+    AdaptiveWayback { pacer, observer, stats }
 }
 
 
